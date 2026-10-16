@@ -1,0 +1,40 @@
+.actionButton {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: none;
+  background: transparent;
+  color: var(--dsw-text-secondary);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.actionButton:hover {
+  background-color: var(--dsw-fill-hover);
+  color: var(--dsw-text-primary);
+}
+
+.actionButton.wide {
+  padding: 0 12px;
+}
+
+.actionGlyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.actionTitle {
+  margin-left: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

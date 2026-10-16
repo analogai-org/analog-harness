@@ -1,0 +1,341 @@
+/* ModelsSection.module.css
+ * Styled strictly with Harness design tokens (`--dsw-alias-*`, `--dsw-radius-*`).
+ */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 8px 0;
+  font-size: 13px;
+  line-height: 22px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.pageHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pageTitle {
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.pageSubtitle {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.byokBanner {
+  background: var(--dsw-alias-settings-card-fill);
+  border: 0.5px solid var(--dsw-alias-settings-card-stroke);
+  border-radius: var(--dsw-radius-xl);
+  padding: 12px 16px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.sectionBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sectionHeaderWithSubtitle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.sectionSubtitle {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Providers Table */
+.tableCard {
+  background: var(--dsw-alias-settings-card-fill);
+  border: 0.5px solid var(--dsw-alias-settings-card-stroke);
+  border-radius: var(--dsw-radius-xl);
+  overflow: hidden;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.th {
+  padding: 10px 16px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--dsw-alias-label-tertiary);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.td {
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  vertical-align: middle;
+}
+
+.table tr:last-child .td {
+  border-bottom: none;
+}
+
+.tdMonospace {
+  font-family: var(--dsw-font-family-mono, monospace);
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.actionsCell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.actionButtonGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.emptyState {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+}
+
+/* Add Provider Button - Full Width */
+.addProviderBtn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Action Buttons */
+.editButton {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 12px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-m);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.editButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.deleteButton {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 12px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-m);
+  background: transparent;
+  color: var(--dsw-alias-state-error-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.deleteButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+}
+
+/* Models Grid */
+.modelsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.modelCard {
+  background: var(--dsw-alias-settings-card-fill);
+  border: 0.5px solid var(--dsw-alias-settings-card-stroke);
+  border-radius: var(--dsw-radius-xl);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.badge {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: var(--dsw-radius-s);
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-interactive-bg-hover);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.modelVal {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.modelProv {
+  font-size: 13px;
+  color: var(--dsw-alias-label-secondary);
+  margin-top: 4px;
+}
+
+.modelMaxTokens {
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+  margin-top: 2px;
+}
+
+.cardDesc {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+/* Modals & Forms */
+.modalBody {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 0 0;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.formLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.formInput,
+.formSelect {
+  box-sizing: border-box;
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  background: var(--dsw-alias-bg-base);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-m);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.formInput:focus,
+.formSelect:focus {
+  border-color: var(--dsw-alias-brand-primary);
+}
+
+.formHelp {
+  display: block;
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--dsw-alias-label-tertiary);
+  margin-top: 2px;
+}
+
+.oauthCard {
+  background: var(--dsw-alias-settings-card-fill);
+  border: 0.5px solid var(--dsw-alias-settings-card-stroke);
+  border-radius: var(--dsw-radius-m);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.oauthTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.oauthText {
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.oauthStatus {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dsw-alias-state-success-primary, var(--dsw-alias-brand-primary));
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.diagnosticBanner {
+  padding: 12px;
+  background: var(--dsw-alias-state-error-fill);
+  border: 0.5px solid var(--dsw-alias-state-error-stroke);
+  border-radius: var(--dsw-radius-m);
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 13px;
+}
