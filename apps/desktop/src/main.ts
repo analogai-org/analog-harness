@@ -3,7 +3,7 @@ import { WINDOWS_TITLEBAR_HEIGHT } from './windows-layout.ts'
 /** Electron shell: desktop project ownership, custom protocol, windows, and lifecycle. */
 
 import { readFile, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   app,
@@ -30,7 +30,6 @@ import { installDesktopDirectoryPicker } from './directory-picker.ts'
 import { installMicrophonePermissions } from './microphone-permissions.ts'
 import { exec, spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { promisify } from 'node:util'
 const execAsync = promisify(exec)
 
@@ -51,23 +50,22 @@ async function ensureAnalogChatBackend(): Promise<void> {
     return
   }
   console.log('[Analog AI] Starting Chat backend process...')
-  const possibleChatDirs = [
-    resolve(app.getAppPath(), '../../chat'),
-    resolve(app.getAppPath(), '../chat'),
-    '/Users/giorgibadzaghua/Documents/GitHub/chat',
-    resolve(process.resourcesPath, 'chat'),
+  
+  const exeName = process.platform === 'win32' ? 'analog-chat-service.exe' : 'analog-chat-service'
+  const possibleBinaries = [
+    resolve(process.resourcesPath, 'analog-chat-service', exeName),
+    resolve(process.resourcesPath, exeName),
+    resolve(app.getAppPath(), '../../chat/dist/analog-chat-service', exeName),
+    resolve(app.getAppPath(), '../../chat/dist/analog-chat-service-win/analog-chat-service', exeName),
+    resolve(app.getAppPath(), '../chat/dist/analog-chat-service', exeName),
+    resolve(app.getAppPath(), 'resources/analog-chat-service', exeName),
   ]
-  const chatDir = possibleChatDirs.find(d => existsSync(d) && existsSync(join(d, 'main.py')))
-  if (chatDir) {
-    const venvPy = process.platform === 'win32'
-      ? join(chatDir, '.venv', 'Scripts', 'python.exe')
-      : join(chatDir, '.venv', 'bin', 'python')
-    const pyExe = existsSync(venvPy) ? venvPy : (process.platform === 'win32' ? 'python' : 'python3')
-
-    console.log(`[Analog AI] Spawning chat backend: ${pyExe} main.py in ${chatDir}`)
+  const binaryPath = possibleBinaries.find(b => existsSync(b))
+  if (binaryPath) {
+    console.log(`[Analog AI] Spawning chat backend binary: ${binaryPath}`)
     try {
-      chatBackendProcess = spawn(pyExe, ['main.py'], {
-        cwd: chatDir,
+      chatBackendProcess = spawn(binaryPath, [], {
+        cwd: dirname(binaryPath),
         env: { ...process.env, PORT: '8071' },
         stdio: ['ignore', 'pipe', 'pipe'],
       })
@@ -83,14 +81,50 @@ async function ensureAnalogChatBackend(): Promise<void> {
         chatBackendProcess = undefined
       })
     } catch (err) {
-      console.error('[Analog AI] Failed to spawn chat backend process:', err)
+      console.error('[Analog AI] Failed to spawn chat backend binary:', err)
     }
   } else {
-    console.warn('[Analog AI] Chat directory not found, attempting docker fallback...')
-    try {
-      await execAsync('docker run -d --rm --name analogai-backend -p 8071:8071 europe-west1-docker.pkg.dev/analog-os-504715/analogai-docker-repo/chat:latest')
-    } catch (e) {
-      console.error('[Analog AI] Docker fallback failed:', e)
+    const possibleChatDirs = [
+      resolve(app.getAppPath(), '../../chat'),
+      resolve(app.getAppPath(), '../chat'),
+      '/Users/giorgibadzaghua/Documents/GitHub/chat',
+      resolve(process.resourcesPath, 'chat'),
+    ]
+    const chatDir = possibleChatDirs.find(d => existsSync(d) && existsSync(join(d, 'main.py')))
+    if (chatDir) {
+      const venvPy = process.platform === 'win32'
+        ? join(chatDir, '.venv', 'Scripts', 'python.exe')
+        : join(chatDir, '.venv', 'bin', 'python')
+      const pyExe = existsSync(venvPy) ? venvPy : (process.platform === 'win32' ? 'python' : 'python3')
+
+      console.log(`[Analog AI] Spawning chat backend: ${pyExe} main.py in ${chatDir}`)
+      try {
+        chatBackendProcess = spawn(pyExe, ['main.py'], {
+          cwd: chatDir,
+          env: { ...process.env, PORT: '8071' },
+          stdio: ['ignore', 'pipe', 'pipe'],
+        })
+
+        chatBackendProcess.stdout?.on('data', (d: Buffer) => {
+          console.log(`[ChatBackend] ${d.toString().trim()}`)
+        })
+        chatBackendProcess.stderr?.on('data', (d: Buffer) => {
+          console.error(`[ChatBackend] ${d.toString().trim()}`)
+        })
+        chatBackendProcess.on('exit', (code) => {
+          console.log(`[ChatBackend] exited with code ${code}`)
+          chatBackendProcess = undefined
+        })
+      } catch (err) {
+        console.error('[Analog AI] Failed to spawn chat backend process:', err)
+      }
+    } else {
+      console.warn('[Analog AI] Chat directory or binary not found, attempting docker fallback...')
+      try {
+        await execAsync('docker run -d --rm --name analogai-backend -p 8071:8071 europe-west1-docker.pkg.dev/analog-os-504715/analogai-docker-repo/chat:latest')
+      } catch (e) {
+        console.error('[Analog AI] Docker fallback failed:', e)
+      }
     }
   }
 
@@ -1293,7 +1327,7 @@ async function main(): Promise<void> {
     locale = resolveDesktopStartupLocale(state.localePreference, systemLanguages)
     windowsLanguage = locale.id
     refreshApplicationMenu()
-    if (!enteredWorkspace && needsWelcome(state)) {
+    if (!enteredWorkspace && needsWelcome({ loggedIn: state.loggedIn, hasApiKey: state.hasApiKey })) {
       // A later login must retain its own activation policy instead of replaying startup focus.
       raiseAfterUpdate = false
       await showWelcome()
