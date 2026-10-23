@@ -50,7 +50,7 @@ function formatProviderName(provider: string): string {
 }
 
 async function fetchMicroserviceModels(): Promise<MicroserviceModel[] | null> {
-  if (process.env.VITEST) {
+  if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
     return null
   }
   for (const url of CHAT_MICROSERVICE_URLS) {
@@ -80,7 +80,7 @@ async function fetchMicroserviceModels(): Promise<MicroserviceModel[] | null> {
  */
 export async function buildModelCatalog(
   ctx: Context,
-  defaultSelection: ModelSelection = ctx.agentDefaultModel?.currentSelection ? ctx.agentDefaultModel.currentSelection() : { provider: '', model: '' },
+  defaultSelection: ModelSelection = ctx.agentDefaultModel.currentSelection(),
 ): Promise<ModelCatalog> {
   const microserviceModels = await fetchMicroserviceModels()
   if (microserviceModels && microserviceModels.length > 0) {
@@ -163,16 +163,6 @@ export async function buildModelCatalog(
     }
   }
 
-  // Only unit tests fall back to in-memory Cordis provider catalog
-  if (!process.env.VITEST) {
-    return {
-      default: { provider: '', model: '' },
-      routableProviders: [],
-      groups: [],
-      failures: [],
-    }
-  }
-
   const providers = ctx.llm.listProviders()
   const catalog = await Promise.all(
     providers.map(async (provider) => {
@@ -185,15 +175,15 @@ export async function buildModelCatalog(
               resolved.reasoning === undefined
                 ? undefined
                 : {
-                  efforts: resolved.reasoning.efforts.map(effort => ({
-                    id: effort.id,
-                    name: effort.name,
-                    ...(effort.description === undefined ? {} : { description: effort.description }),
-                  })),
-                  ...(resolved.reasoning.defaultEffort === undefined
-                    ? {}
-                    : { defaultEffort: resolved.reasoning.defaultEffort }),
-                }
+                    efforts: resolved.reasoning.efforts.map(effort => ({
+                      id: effort.id,
+                      name: effort.name,
+                      ...(effort.description === undefined ? {} : { description: effort.description }),
+                    })),
+                    ...(resolved.reasoning.defaultEffort === undefined
+                      ? {}
+                      : { defaultEffort: resolved.reasoning.defaultEffort }),
+                  }
             return {
               id: model.id,
               name: model.name,
@@ -238,7 +228,7 @@ export async function buildModelCatalog(
 export async function modelAvailable(ctx: Context, selection: ModelSelection): Promise<boolean> {
   const microserviceModels = await fetchMicroserviceModels()
   if (microserviceModels && microserviceModels.length > 0) {
-    const found = microserviceModels.some((m) => {
+    const found = microserviceModels.some(m => {
       const p = (m.provider || m.owned_by || '').toLowerCase()
       return (
         (p === selection.provider.toLowerCase() || !selection.provider) &&

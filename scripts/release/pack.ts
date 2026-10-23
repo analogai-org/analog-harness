@@ -53,14 +53,18 @@ function parseConcurrency(raw: string | undefined): number {
 async function main(): Promise<void> {
   const { values } = parseArgs({
     options: { family: { type: 'string' }, out: { type: 'string' }, concurrency: { type: 'string' } },
-    allowPositionals: false,
+    allowPositionals: true,
+    strict: false,
   })
-  if (values.family === undefined) throw new Error('usage: pack.ts --family <dsh|vendor> [--out dist/npm] [--concurrency 1]')
-  const concurrency = parseConcurrency(values.concurrency)
+  const familyRaw = typeof values.family === 'string' ? values.family : undefined
+  const outRaw = typeof values.out === 'string' ? values.out : undefined
+  const concurrencyRaw = typeof values.concurrency === 'string' ? values.concurrency : undefined
+  if (familyRaw === undefined) throw new Error('usage: pack.ts --family <dsh|vendor> [--out dist/npm] [--concurrency 1]')
+  const concurrency = parseConcurrency(concurrencyRaw)
 
-  const family = releaseFamily(values.family)
+  const family = releaseFamily(familyRaw)
   const root = process.cwd()
-  const destination = resolve(root, values.out ?? DEFAULT_OUTPUT)
+  const destination = resolve(root, outRaw ?? DEFAULT_OUTPUT)
   const members = family.publishOrder(family.members(root)).order
   family.verifyBuildArtifacts(root)
   family.verifyVersions(members)

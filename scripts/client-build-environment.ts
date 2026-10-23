@@ -248,7 +248,7 @@ export function assertClientBuildEnvironment(
 
   const names = [...new Set([...Object.keys(actual), ...Object.keys(normalizedExpected)])].sort()
   const differences = names.filter(name => actual[name] !== normalizedExpected[name])
-  throw new Error(`client build environment differs from the required artifact profile: ${differences.join(', ')}`)
+  throw new Error(`client build environment differs from the required artifact profile: ${differences.map(d => `${d} (actual=${JSON.stringify(actual[d])}, expected=${JSON.stringify(normalizedExpected[d])})`).join(', ')}`)
 }
 
 /**

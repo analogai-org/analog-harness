@@ -207,7 +207,7 @@ export function CreditsBadge() {
             <button
               type="button"
               className={css.toggleManualBtn}
-              onClick={() => setShowManual(prev => !prev)}
+              onClick={() => setShowManual((prev) => !prev)}
             >
               <span>{showManual ? '▼' : '▶'} Manual License Key Entry (Secondary Option)</span>
             </button>
@@ -222,7 +222,7 @@ export function CreditsBadge() {
                     className={css.input}
                     placeholder="e.g. ANALOG-XXXX-XXXX-XXXX"
                     value={keyInput}
-                    onChange={e => setKeyInput(e.target.value)}
+                    onChange={(e) => setKeyInput(e.target.value)}
                     disabled={redeeming}
                   />
                 </div>

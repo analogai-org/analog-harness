@@ -163,43 +163,17 @@ export function ModelsSection(_props?: ModelsSectionProps) {
       }
 
       // 2. Fetch providers for active agent
-      let loadedProviders: ProviderItem[] = []
       const provRes = await fetch(`${CHAT_BASE_URL}/v1/agents/${currentAgentId}/providers`)
       if (provRes.ok) {
         const provData = await provRes.json()
-        loadedProviders = Array.isArray(provData) ? provData : provData.providers || []
-        setProviders(loadedProviders)
+        setProviders(Array.isArray(provData) ? provData : provData.providers || [])
       }
 
       // 3. Fetch models for active agent
-      let loadedModels: ModelItem[] = []
       const modRes = await fetch(`${CHAT_BASE_URL}/v1/agents/${currentAgentId}/models`)
       if (modRes.ok) {
         const modData = await modRes.json()
-        loadedModels = Array.isArray(modData) ? modData : modData.models || []
-        setModels(loadedModels)
-      }
-
-      // Sync to localStorage and notify other UI components
-      try {
-        const configuredList: Array<{ id: string; name: string; provider: string; category?: string }> = []
-        for (const m of loadedModels) {
-          const p = loadedProviders.find(pr => pr.id === m.provider_id)
-          const pName = p ? (p.display_name || p.name) : (m.provider_id || 'custom')
-          const mName = m.name || m.model_name || m.id
-          if (mName && mName !== 'Not Configured') {
-            configuredList.push({
-              id: m.id || mName,
-              name: mName,
-              provider: pName.toLowerCase(),
-              category: m.type || m.model_type || 'default',
-            })
-          }
-        }
-        localStorage.setItem('analog_configured_models', JSON.stringify(configuredList))
-        window.dispatchEvent(new CustomEvent('analog-models-updated'))
-      } catch {
-        // ignore
+        setModels(Array.isArray(modData) ? modData : modData.models || [])
       }
 
       // 4. Check OAuth
@@ -230,7 +204,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
     window.open(
       `${CHAT_BASE_URL}/auth/openai/login?return_to=popup`,
       'OpenAI_OAuth',
-      `width=${width},height=${height},left=${left},top=${top}`,
+      `width=${width},height=${height},left=${left},top=${top}`
     )
 
     if (oauthPollRef.current) clearInterval(oauthPollRef.current)
@@ -355,7 +329,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
       setSelectedMaxTokens(maxTok ? String(maxTok) : '')
     } else {
       setSelectedProviderId(providers[0]?.id || '')
-      setSelectedModelName('')
+      setSelectedModelName(modelType === 'reasoning' ? 'gpt-4o' : 'gpt-4o-mini')
       setSelectedMaxTokens('')
     }
     setModelModalOpen(true)

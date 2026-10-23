@@ -24,7 +24,7 @@ export function BrandWordmark({ size = 24, className }: BrandWordmarkProps) {
         lineHeight: 1,
         display: 'inline-flex',
         alignItems: 'center',
-        color: 'currentColor',
+        color: 'currentColor'
       }}
       aria-hidden="true"
     >

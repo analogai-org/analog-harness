@@ -10,7 +10,6 @@ interface ProviderPreset {
   teacherModel: string
   studentModel: string
   keyRequired: boolean
-  models: string[]
 }
 
 const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
@@ -20,7 +19,6 @@ const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
     teacherModel: 'deepseek-reasoner',
     studentModel: 'deepseek-chat',
     keyRequired: true,
-    models: ['deepseek-reasoner', 'deepseek-chat', 'deepseek-coder', 'deepseek-r1'],
   },
   openai: {
     name: 'OpenAI',
@@ -28,127 +26,34 @@ const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
     teacherModel: 'o3-mini',
     studentModel: 'gpt-4o-mini',
     keyRequired: true,
-    models: ['gpt-4o', 'gpt-4o-mini', 'o1', 'o1-mini', 'o1-preview', 'o3-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
   },
   anthropic: {
     name: 'Anthropic',
     baseUrl: 'https://api.anthropic.com/v1',
-    teacherModel: 'claude-3-7-sonnet-20250219',
-    studentModel: 'claude-3-5-haiku-20241022',
+    teacherModel: 'claude-3-7-sonnet-latest',
+    studentModel: 'claude-3-5-haiku-latest',
     keyRequired: true,
-    models: ['claude-3-7-sonnet-20250219', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'],
-  },
-  gemini: {
-    name: 'Google Gemini',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-    teacherModel: 'gemini/gemini-2.5-pro',
-    studentModel: 'gemini/gemini-2.5-flash',
-    keyRequired: true,
-    models: ['gemini/gemini-2.5-pro', 'gemini/gemini-2.5-flash', 'gemini/gemini-2.0-flash', 'gemini/gemini-2.0-flash-lite', 'gemini/gemini-1.5-pro', 'gemini/gemini-1.5-flash'],
-  },
-  vertex_ai: {
-    name: 'Google Vertex AI',
-    baseUrl: '',
-    teacherModel: 'vertex_ai/gemini-2.5-pro',
-    studentModel: 'vertex_ai/gemini-2.5-flash',
-    keyRequired: true,
-    models: ['vertex_ai/gemini-2.5-pro', 'vertex_ai/gemini-2.5-flash', 'vertex_ai/gemini-2.0-flash', 'vertex_ai/gemini-1.5-pro', 'vertex_ai/gemini-1.5-flash', 'vertex_ai/claude-3-5-sonnet@20241022'],
-  },
-  xai: {
-    name: 'xAI (Grok)',
-    baseUrl: 'https://api.x.ai/v1',
-    teacherModel: 'xai/grok-2-1212',
-    studentModel: 'xai/grok-2-mini',
-    keyRequired: true,
-    models: ['xai/grok-2-1212', 'xai/grok-2-mini', 'xai/grok-beta', 'xai/grok-2-vision-1212'],
-  },
-  groq: {
-    name: 'Groq',
-    baseUrl: 'https://api.groq.com/openai/v1',
-    teacherModel: 'groq/deepseek-r1-distill-llama-70b',
-    studentModel: 'groq/llama-3.3-70b-versatile',
-    keyRequired: true,
-    models: ['groq/llama-3.3-70b-versatile', 'groq/llama-3.1-8b-instant', 'groq/deepseek-r1-distill-llama-70b', 'groq/mixtral-8x7b-32768', 'groq/gemma2-9b-it'],
   },
   openrouter: {
     name: 'OpenRouter',
     baseUrl: 'https://openrouter.ai/api/v1',
-    teacherModel: 'openrouter/deepseek/deepseek-r1',
-    studentModel: 'openrouter/deepseek/deepseek-chat',
+    teacherModel: 'deepseek/deepseek-r1',
+    studentModel: 'deepseek/deepseek-chat',
     keyRequired: true,
-    models: ['openrouter/deepseek/deepseek-r1', 'openrouter/deepseek/deepseek-chat', 'openrouter/anthropic/claude-3.5-sonnet', 'openrouter/meta-llama/llama-3.3-70b-instruct', 'openrouter/google/gemini-2.0-flash-001', 'openrouter/openai/gpt-4o', 'openrouter/openai/o3-mini'],
   },
-  together: {
-    name: 'Together AI',
-    baseUrl: 'https://api.together.xyz/v1',
-    teacherModel: 'together_ai/deepseek-ai/DeepSeek-R1',
-    studentModel: 'together_ai/meta-llama/Llama-3.3-70B-Instruct-Turbo',
+  groq: {
+    name: 'Groq',
+    baseUrl: 'https://api.groq.com/openai/v1',
+    teacherModel: 'deepseek-r1-distill-llama-70b',
+    studentModel: 'llama-3.3-70b-versatile',
     keyRequired: true,
-    models: ['together_ai/deepseek-ai/DeepSeek-R1', 'together_ai/meta-llama/Llama-3.3-70B-Instruct-Turbo', 'together_ai/meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo', 'together_ai/mistralai/Mixtral-8x7B-Instruct-v0.1', 'together_ai/Qwen/Qwen2.5-72B-Instruct-Turbo'],
-  },
-  mistral: {
-    name: 'Mistral AI',
-    baseUrl: 'https://api.mistral.ai/v1',
-    teacherModel: 'mistral/mistral-large-latest',
-    studentModel: 'mistral/mistral-small-latest',
-    keyRequired: true,
-    models: ['mistral/mistral-large-latest', 'mistral/mistral-small-latest', 'mistral/codestral-latest', 'mistral/open-mistral-nemo'],
-  },
-  perplexity: {
-    name: 'Perplexity',
-    baseUrl: 'https://api.perplexity.ai',
-    teacherModel: 'perplexity/sonar-reasoning-pro',
-    studentModel: 'perplexity/sonar',
-    keyRequired: true,
-    models: ['perplexity/sonar-reasoning-pro', 'perplexity/sonar-reasoning', 'perplexity/sonar-pro', 'perplexity/sonar'],
-  },
-  cohere: {
-    name: 'Cohere',
-    baseUrl: 'https://api.cohere.ai/v1',
-    teacherModel: 'cohere/command-r-plus',
-    studentModel: 'cohere/command-r',
-    keyRequired: true,
-    models: ['cohere/command-r-plus', 'cohere/command-r', 'cohere/command-light'],
-  },
-  cerebras: {
-    name: 'Cerebras',
-    baseUrl: 'https://api.cerebras.ai/v1',
-    teacherModel: 'cerebras/llama-3.3-70b',
-    studentModel: 'cerebras/llama3.1-8b',
-    keyRequired: true,
-    models: ['cerebras/llama-3.3-70b', 'cerebras/llama3.1-8b', 'cerebras/llama3.1-70b'],
-  },
-  sambanova: {
-    name: 'SambaNova',
-    baseUrl: 'https://api.sambanova.ai/v1',
-    teacherModel: 'sambanova/DeepSeek-R1',
-    studentModel: 'sambanova/Meta-Llama-3.3-70B-Instruct',
-    keyRequired: true,
-    models: ['sambanova/DeepSeek-R1', 'sambanova/Meta-Llama-3.3-70B-Instruct', 'sambanova/Meta-Llama-3.1-8B-Instruct', 'sambanova/Qwen2.5-72B-Instruct'],
-  },
-  fireworks: {
-    name: 'Fireworks AI',
-    baseUrl: 'https://api.fireworks.ai/inference/v1',
-    teacherModel: 'fireworks_ai/deepseek-r1',
-    studentModel: 'fireworks_ai/llama-v3p3-70b-instruct',
-    keyRequired: true,
-    models: ['fireworks_ai/deepseek-r1', 'fireworks_ai/llama-v3p3-70b-instruct', 'fireworks_ai/llama-v3p1-8b-instruct', 'fireworks_ai/qwen2p5-72b-instruct'],
-  },
-  azure: {
-    name: 'Azure OpenAI',
-    baseUrl: '',
-    teacherModel: 'azure/gpt-4o',
-    studentModel: 'azure/gpt-4o-mini',
-    keyRequired: true,
-    models: ['azure/gpt-4o', 'azure/gpt-4o-mini', 'azure/o3-mini', 'azure/o1-mini', 'azure/gpt-4'],
   },
   ollama: {
     name: 'Ollama (Local)',
     baseUrl: 'http://localhost:11434/v1',
-    teacherModel: 'ollama/deepseek-r1',
-    studentModel: 'ollama/llama3.2',
+    teacherModel: 'deepseek-r1:14b',
+    studentModel: 'qwen2.5-coder:7b',
     keyRequired: false,
-    models: ['ollama/deepseek-r1', 'ollama/llama3.2', 'ollama/llama3.3', 'ollama/qwen2.5', 'ollama/mistral', 'ollama/phi4'],
   },
   custom: {
     name: 'Custom Provider',
@@ -156,11 +61,11 @@ const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
     teacherModel: '',
     studentModel: '',
     keyRequired: true,
-    models: [],
   },
 }
 
 const DEFAULT_PRESET: ProviderPreset = PROVIDER_PRESETS.deepseek!
+const SHOW_OPENAI_OAUTH = false
 
 export function Welcome({ api }: { api: WelcomeApi }) {
   // Step 0: Welcome overview with "Start Configuration" button
@@ -173,7 +78,6 @@ export function Welcome({ api }: { api: WelcomeApi }) {
   const [baseUrl, setBaseUrl] = useState(DEFAULT_PRESET.baseUrl)
   const [teacherModel, setTeacherModel] = useState(DEFAULT_PRESET.teacherModel)
   const [studentModel, setStudentModel] = useState(DEFAULT_PRESET.studentModel)
-  const [modelSuggestions, setModelSuggestions] = useState<string[]>(DEFAULT_PRESET.models)
 
   const [oauthAccount, setOauthAccount] = useState<string | null>(null)
   const isOpenAI = providerType === 'openai'
@@ -182,47 +86,6 @@ export function Welcome({ api }: { api: WelcomeApi }) {
   const [statusMessage, setStatusMessage] = useState('')
   const [error, setError] = useState('')
   const mounted = useRef(true)
-
-  useEffect(() => {
-    let active = true
-    const preset = PROVIDER_PRESETS[providerType]
-    const initialList = preset?.models ? [...preset.models] : []
-    setModelSuggestions(initialList)
-
-    const fetchModels = async () => {
-      const endpoints = [
-        `http://127.0.0.1:8071/v1/providers/${encodeURIComponent(providerType)}/models`,
-        `http://localhost:8071/v1/providers/${encodeURIComponent(providerType)}/models`,
-        `/v1/providers/${encodeURIComponent(providerType)}/models`,
-      ]
-      for (const ep of endpoints) {
-        try {
-          const res = await fetch(ep)
-          if (res.ok) {
-            const data = await res.json()
-            if (active && data.data && Array.isArray(data.data)) {
-              const fetchedIds: string[] = data.data.map((m: { id: string }) => m.id)
-              const merged = [...initialList]
-              for (const id of fetchedIds) {
-                if (!merged.includes(id)) {
-                  merged.push(id)
-                }
-              }
-              setModelSuggestions(merged)
-              break
-            }
-          }
-        } catch {
-          // try next
-        }
-      }
-    }
-
-    void fetchModels()
-    return () => {
-      active = false
-    }
-  }, [providerType])
 
   useEffect(() => {
     mounted.current = true
@@ -325,7 +188,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
     const preset = PROVIDER_PRESETS[providerType]
     const keyRequired = preset ? preset.keyRequired : true
 
-    if (isOpenAI) {
+    if (isOpenAI && SHOW_OPENAI_OAUTH) {
       if (!oauthAccount && !apiKey.trim()) {
         setError('Please log in with your OpenAI subscription or enter an API key.')
         return
@@ -469,7 +332,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                   id="provider-select"
                   value={providerType}
                   disabled={busy}
-                  onChange={e => handleProviderChange(e.target.value)}
+                  onChange={(e) => handleProviderChange(e.target.value)}
                 >
                   {Object.entries(PROVIDER_PRESETS).map(([key, val]) => (
                     <option key={key} value={key}>
@@ -479,7 +342,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                 </select>
               </div>
 
-              {isOpenAI && (
+              {SHOW_OPENAI_OAUTH && isOpenAI && (
                 <div className="openai-subscription-card">
                   <div className="openai-subscription-header">
                     <div className="openai-subscription-title">
@@ -509,7 +372,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
 
               <div className="key-field">
                 <label htmlFor="key-input">
-                  {isOpenAI
+                  {SHOW_OPENAI_OAUTH && isOpenAI
                     ? (oauthAccount ? 'API Key (Optional with OpenAI Login)' : 'API Key (or Login Above)')
                     : (selectedPreset.keyRequired ? 'API Key' : 'API Key (Optional)')}
                 </label>
@@ -520,7 +383,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                   autoCapitalize="off"
                   spellCheck={false}
                   placeholder={
-                    isOpenAI && oauthAccount
+                    SHOW_OPENAI_OAUTH && isOpenAI && oauthAccount
                       ? 'Optional (using OAuth subscription)'
                       : (selectedPreset.keyRequired ? 'Enter your API key...' : 'Optional')
                   }
@@ -596,7 +459,6 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                 <input
                   id="teacher-model-input"
                   type="text"
-                  list="teacher-models-list"
                   placeholder="e.g. deepseek-reasoner"
                   value={teacherModel}
                   disabled={busy}
@@ -606,11 +468,6 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                   }}
                   autoFocus
                 />
-                <datalist id="teacher-models-list">
-                  {modelSuggestions.map(m => (
-                    <option key={m} value={m} />
-                  ))}
-                </datalist>
               </div>
 
               <div className="key-field">
@@ -618,7 +475,6 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                 <input
                   id="student-model-input"
                   type="text"
-                  list="student-models-list"
                   placeholder="e.g. deepseek-chat"
                   value={studentModel}
                   disabled={busy}
@@ -627,11 +483,6 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                     setError('')
                   }}
                 />
-                <datalist id="student-models-list">
-                  {modelSuggestions.map(m => (
-                    <option key={m} value={m} />
-                  ))}
-                </datalist>
               </div>
 
               {error && (
