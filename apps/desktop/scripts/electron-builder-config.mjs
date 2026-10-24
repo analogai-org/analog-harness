@@ -226,6 +226,7 @@ export function createElectronBuilderConfig(
       )
     },
     win: {
+      executableName: 'Analog AI',
       icon: fileURLToPath(new URL('../resources/icon-windows.png', import.meta.url)),
       forceCodeSigning: !unsigned,
       signtoolOptions: {
