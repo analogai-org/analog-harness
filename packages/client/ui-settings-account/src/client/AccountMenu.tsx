@@ -1,67 +1,58 @@
-/** Sidebar account launcher and locally authoritative sign-out action. */
+/** Sidebar account launcher without sign in / sign out. */
 import { useEffect, useRef, useState } from 'react'
 import {
-  Menu, IconEllipsisOutlineMedium, IconPaperPlaneOutlineMedium, IconSettingsOutlineMedium,
+  Toast, Menu, IconEllipsisOutlineMedium, IconPaperPlaneOutlineMedium, IconSettingsOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { AccountSectionInjected } from './AccountSection.tsx'
-import { SignInDialog } from './SignInDialog.tsx'
 import { AccountAvatar } from './AccountAvatar.tsx'
 import { AccountNoticeCard } from './AccountNotice.tsx'
 import css from './AccountMenu.module.css'
 
 /** Account launcher composed by the settings shell. */
+export type AccountMenuProps = PropsRuntime<'settings.launcher'> & PropsLocale<'settings.account'> & InjectFace<AccountSectionInjected>
+
+/** The account menu launcher.
+ * @param props - sidebar geometry, settings navigation and account operations.
+ * @returns account menu launcher.
+ */
 export function AccountMenu({
-  account, settingsShortcut, colorScheme,
-  contactUs, openSettings, openOnboarding, showLogin,
-  start, cancel, t,
-}: {
-  account: InjectFace<AccountSectionInjected>
-  settingsShortcut?: string
-  contactUs: () => void
-  openSettings: () => void
-  openOnboarding: (preferredProvider?: string) => void
-  showLogin: (visible: boolean) => void
-} & PropsRuntime & PropsLocale) {
+  subscribeSessionExpired, subscribeModelSignInRequired, wide, settingsShortcut, openSettings, settingsOpen,
+  useAccount, refreshAccount, bonusNoticeShown, bonusNoticeDismissed,
+  contactUs, t,
+}: AccountMenuProps) {
+  const anchor = useRef<HTMLDivElement>(null)
+  const settingsWasOpen = useRef(false)
+  useEffect(() => {
+    if (settingsOpen && !settingsWasOpen.current) void refreshAccount()
+    settingsWasOpen.current = settingsOpen
+  }, [refreshAccount, settingsOpen])
+  const account = useAccount(state => state)
+  const signedIn = account.view?.status === 'credential-stored'
+  const [signInNotice, setSignInNotice] = useState(0)
+  useEffect(() => subscribeModelSignInRequired?.(() => { setSignInNotice(value => value + 1) }), [subscribeModelSignInRequired])
+  const [expiryNotice, setExpiryNotice] = useState(false)
+  useEffect(() => subscribeSessionExpired?.(() => { setExpiryNotice(true) }), [subscribeSessionExpired])
+  const profile = account.details?.profile
+  const label = profile === undefined ? null : profile.status === 'ready'
+    ? profile.value.name ?? profile.value.contact ?? t('signedIn') : t('signedIn')
   const [open, setOpen] = useState(false)
   const trigger = useRef<HTMLButtonElement>(null)
 
-  useEffect(() => {
-    if (!open) return
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        setOpen(false)
-        trigger.current?.focus()
-      }
-    }
-    window.addEventListener('keydown', onKeyDown, true)
-    return () => { window.removeEventListener('keydown', onKeyDown, true) }
-  }, [open])
-
-  return <div className={css.accountMenu}>
-    <button ref={trigger}
-      className={css.launcher}
-      type="button"
-      aria-haspopup="menu"
-      aria-expanded={open}
-      aria-label={t('accountSettings')}
-      onClick={() => { setOpen((value) => !value) }}>
-      <AccountAvatar user={account.user} size={32} />
-      <span className={css.username}>{account.user?.name ?? t('guest')}</span>
-      <IconEllipsisOutlineMedium size={16} className={css.ellipsis} />
-    </button>
-    <Menu open={open}
-      triggerRef={trigger}
-      direction="up"
-      header={<div className={css.menuHeader}>
-        <AccountAvatar user={account.user} size={48} />
-        <div className={css.menuUserInfo}>
-          <div className={css.menuUsername}>{account.user?.name ?? t('guest')}</div>
-          {account.user?.email && <div className={css.menuEmail}>{account.user.email}</div>}
-        </div>
-      </div>}
-      notices={<AccountNoticeCard user={account.user} t={t} />}
+  return <div ref={anchor} className={css.root}>
+    {signInNotice > 0 && <Toast key={signInNotice} text={t('modelSignInRequired')} onDone={() => { setSignInNotice(0) }} />}
+    {expiryNotice && <Toast text={t('sessionExpired')} onDone={() => { setExpiryNotice(false) }} />}
+    {signedIn && account.notice && <AccountNoticeCard key={account.notice.orderId} notice={account.notice}
+      anchor={anchor} title={t('bonusNoticeTitle')} closeLabel={t('close')}
+      onShown={bonusNoticeShown} onDismiss={bonusNoticeDismissed} />}
+    <Menu open={open} side="top" portal autoFocus className={css.anchor} listClassName={signedIn ? undefined : css.signedOutMenu}
+      anchor={<button ref={trigger} type="button" className={css.trigger} data-collapsed={!wide} data-signed-out={!signedIn} aria-label={t('menu')}
+        aria-haspopup="menu" aria-expanded={open} onClick={() => { setOpen(value => !value) }}>
+        {signedIn
+          ? <span className={css.avatar}><AccountAvatar url={profile?.status === 'ready' ? profile.value.avatarUrl : null} /></span>
+          : <IconEllipsisOutlineMedium size={14} />}
+        {wide && <span className={css.label}>{signedIn ? label : t('more')}</span>}
+      </button>}
       items={[
         { id: 'settings', label: t('settings'), icon: <IconSettingsOutlineMedium size={16} />,
           ...(settingsShortcut === undefined ? {} : { shortcut: settingsShortcut }) },
@@ -72,8 +63,5 @@ export function AccountMenu({
         if (id === 'settings') { setOpen(false); trigger.current?.focus(); openSettings() }
         else if (id === 'contact') { setOpen(false); contactUs() }
       }} />
-    {account.loginVisible && !account.onboarding && <SignInDialog account={account} colorScheme={colorScheme}
-      start={start} cancel={cancel} t={t}
-      close={() => { showLogin(false) }} useApiKey={() => { showLogin(false); openOnboarding('deepseek-official') }} />}
   </div>
 }
