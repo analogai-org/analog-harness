@@ -50,7 +50,7 @@ function formatProviderName(provider: string): string {
 }
 
 async function fetchMicroserviceModels(): Promise<MicroserviceModel[] | null> {
-  if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
+  if (process.env.VITEST) {
     return null
   }
   for (const url of CHAT_MICROSERVICE_URLS) {
@@ -80,7 +80,7 @@ async function fetchMicroserviceModels(): Promise<MicroserviceModel[] | null> {
  */
 export async function buildModelCatalog(
   ctx: Context,
-  defaultSelection: ModelSelection = ctx.agentDefaultModel.currentSelection(),
+  defaultSelection: ModelSelection = ctx.agentDefaultModel?.currentSelection ? ctx.agentDefaultModel.currentSelection() : { provider: '', model: '' },
 ): Promise<ModelCatalog> {
   const microserviceModels = await fetchMicroserviceModels()
   if (microserviceModels && microserviceModels.length > 0) {
@@ -160,6 +160,16 @@ export async function buildModelCatalog(
         groups,
         failures: [],
       }
+    }
+  }
+
+  // Only unit tests fall back to in-memory Cordis provider catalog
+  if (!process.env.VITEST) {
+    return {
+      default: { provider: '', model: '' },
+      routableProviders: [],
+      groups: [],
+      failures: [],
     }
   }
 

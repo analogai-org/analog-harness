@@ -241,6 +241,7 @@ export function createElectronBuilderConfig(
       target: ['AppImage'],
     },
     nsis: {
+      uninstallDisplayName: 'Analog AI',
       installerSidebar: join(buildPaths.root, 'installer-ui', 'uninstaller-sidebar.bmp'),
       uninstallerSidebar: join(buildPaths.root, 'installer-ui', 'uninstaller-sidebar.bmp'),
       include: fileURLToPath(new URL('./installer.nsh', import.meta.url)),

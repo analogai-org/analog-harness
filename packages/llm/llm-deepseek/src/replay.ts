@@ -16,7 +16,7 @@ export interface ReplayBlock {
  */
 export function object(value: unknown, code = 'MALFORMED_RESPONSE'): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new LlmError('DeepSeek Messages expected a JSON object', code)
+    throw new LlmError('Analog AI Messages expected a JSON object', code)
   }
   return value as Record<string, unknown>
 }
@@ -47,7 +47,7 @@ export function readReplay(message: Message, model: string, onDegrade?: (reason:
 
 function validateReplay(message: Message, model: string): ReplayBlock[] | undefined {
   if (message.source.kind !== 'model' || message.source.replayState === undefined) return undefined
-  const fail = (detail: string): never => { throw new LlmError(`DeepSeek Messages replay: ${detail}`, 'INVALID_REPLAY_STATE') }
+  const fail = (detail: string): never => { throw new LlmError(`Analog AI Messages replay: ${detail}`, 'INVALID_REPLAY_STATE') }
   const envelope = object(message.source.replayState, 'INVALID_REPLAY_STATE')
   const response = object(envelope.response, 'INVALID_REPLAY_STATE')
   if (response.kind !== 'deepseek-messages' || response.version !== 1) return fail('unsupported kind or version')

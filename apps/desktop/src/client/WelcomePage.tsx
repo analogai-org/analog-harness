@@ -12,75 +12,28 @@ interface ProviderPreset {
   keyRequired: boolean
 }
 
-const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
-  deepseek: {
-    name: 'DeepSeek',
-    baseUrl: 'https://api.deepseek.com',
-    teacherModel: 'deepseek-reasoner',
-    studentModel: 'deepseek-chat',
-    keyRequired: true,
-  },
-  openai: {
-    name: 'OpenAI',
-    baseUrl: 'https://api.openai.com/v1',
-    teacherModel: 'o3-mini',
-    studentModel: 'gpt-4o-mini',
-    keyRequired: true,
-  },
-  anthropic: {
-    name: 'Anthropic',
-    baseUrl: 'https://api.anthropic.com/v1',
-    teacherModel: 'claude-3-7-sonnet-latest',
-    studentModel: 'claude-3-5-haiku-latest',
-    keyRequired: true,
-  },
-  openrouter: {
-    name: 'OpenRouter',
-    baseUrl: 'https://openrouter.ai/api/v1',
-    teacherModel: 'deepseek/deepseek-r1',
-    studentModel: 'deepseek/deepseek-chat',
-    keyRequired: true,
-  },
-  groq: {
-    name: 'Groq',
-    baseUrl: 'https://api.groq.com/openai/v1',
-    teacherModel: 'deepseek-r1-distill-llama-70b',
-    studentModel: 'llama-3.3-70b-versatile',
-    keyRequired: true,
-  },
-  ollama: {
-    name: 'Ollama (Local)',
-    baseUrl: 'http://localhost:11434/v1',
-    teacherModel: 'deepseek-r1:14b',
-    studentModel: 'qwen2.5-coder:7b',
-    keyRequired: false,
-  },
-  custom: {
-    name: 'Custom Provider',
-    baseUrl: '',
-    teacherModel: '',
-    studentModel: '',
-    keyRequired: true,
-  },
+const FALLBACK_DEFAULT: ProviderPreset = {
+  name: 'DeepSeek',
+  baseUrl: 'https://api.deepseek.com',
+  teacherModel: 'deepseek-reasoner',
+  studentModel: 'deepseek-chat',
+  keyRequired: true,
 }
-
-const DEFAULT_PRESET: ProviderPreset = PROVIDER_PRESETS.deepseek!
-const SHOW_OPENAI_OAUTH = false
 
 export function Welcome({ api }: { api: WelcomeApi }) {
   // Step 0: Welcome overview with "Start Configuration" button
   // Step 1: Add Providers
   // Step 2: Add Teacher & Student models
   const [step, setStep] = useState<0 | 1 | 2>(0)
+  const [providers, setProviders] = useState<Record<string, ProviderPreset>>({
+    deepseek: FALLBACK_DEFAULT,
+  })
 
   const [providerType, setProviderType] = useState('deepseek')
   const [apiKey, setApiKey] = useState('')
-  const [baseUrl, setBaseUrl] = useState(DEFAULT_PRESET.baseUrl)
-  const [teacherModel, setTeacherModel] = useState(DEFAULT_PRESET.teacherModel)
-  const [studentModel, setStudentModel] = useState(DEFAULT_PRESET.studentModel)
-
-  const [oauthAccount, setOauthAccount] = useState<string | null>(null)
-  const isOpenAI = providerType === 'openai'
+  const [baseUrl, setBaseUrl] = useState(FALLBACK_DEFAULT.baseUrl)
+  const [teacherModel, setTeacherModel] = useState(FALLBACK_DEFAULT.teacherModel)
+  const [studentModel, setStudentModel] = useState(FALLBACK_DEFAULT.studentModel)
 
   const [busy, setBusy] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
@@ -90,92 +43,50 @@ export function Welcome({ api }: { api: WelcomeApi }) {
   useEffect(() => {
     mounted.current = true
     document.title = 'Analog AI Harness Setup'
+
+    // Fetch dynamic available providers from chat microservice localhost:8071
+    fetch('http://localhost:8071/available-providers')
+      .catch(() => fetch('http://localhost:8071/v1/available-providers'))
+      .then((res) => {
+        if (res && res.ok) return res.json()
+        throw new Error('Failed to fetch providers')
+      })
+      .then((data) => {
+        if (data && Array.isArray(data.providers) && data.providers.length > 0) {
+          const map: Record<string, ProviderPreset> = {}
+          for (const p of data.providers) {
+            map[p.id] = {
+              name: p.name,
+              baseUrl: p.baseUrl || p.base_url || '',
+              teacherModel: p.teacherModel || p.teacher_model || '',
+              studentModel: p.studentModel || p.student_model || '',
+              keyRequired: p.keyRequired ?? p.key_required ?? true,
+            }
+          }
+          if (mounted.current) {
+            setProviders(map)
+            // If the currently selected provider is present in map, sync its values if not edited
+            const active = map[providerType] || map[data.providers[0].id]
+            if (active && !apiKey) {
+              setBaseUrl(active.baseUrl)
+              setTeacherModel(active.teacherModel)
+              setStudentModel(active.studentModel)
+            }
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not fetch available providers from microservice:', err)
+      })
+
     return () => {
       mounted.current = false
     }
   }, [])
 
-  useEffect(() => {
-    if (!isOpenAI) return
-    let active = true
-
-    const checkStatus = async () => {
-      try {
-        const endpoints = [
-          'http://127.0.0.1:8071/auth/openai/status',
-          'http://localhost:8071/auth/openai/status',
-          '/auth/openai/status',
-        ]
-        for (const ep of endpoints) {
-          try {
-            const res = await fetch(ep)
-            if (res.ok) {
-              const data = await res.json()
-              if (active && data.connected) {
-                setOauthAccount(data.account_email || 'OpenAI Subscription Active')
-                setError('')
-                break
-              }
-            }
-          } catch {
-            // try next endpoint
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    void checkStatus()
-    const interval = setInterval(() => {
-      void checkStatus()
-    }, 1500)
-
-    const handleFocus = () => {
-      void checkStatus()
-    }
-
-    const handleMessage = (evt: MessageEvent) => {
-      if (evt.data && evt.data.type === 'openai_oauth_success') {
-        setOauthAccount(evt.data.account_email || 'OpenAI Subscription Active')
-        setError('')
-      }
-    }
-
-    window.addEventListener('focus', handleFocus)
-    window.addEventListener('message', handleMessage)
-    return () => {
-      active = false
-      clearInterval(interval)
-      window.removeEventListener('focus', handleFocus)
-      window.removeEventListener('message', handleMessage)
-    }
-  }, [isOpenAI])
-
-  const handleOpenAILogin = async () => {
-    const loginUrl = 'http://127.0.0.1:8071/auth/openai/login'
-    setError('')
-    try {
-      if (api.openExternal) {
-        await api.openExternal(loginUrl)
-      } else {
-        const popup = window.open(
-          loginUrl,
-          'OpenAIOAuthPopup',
-          'width=540,height=680,menubar=no,toolbar=no,location=no,status=no',
-        )
-        if (!popup) {
-          window.open(loginUrl, '_blank')
-        }
-      }
-    } catch {
-      window.open(loginUrl, '_blank')
-    }
-  }
-
   function handleProviderChange(type: string) {
     setProviderType(type)
-    const preset = PROVIDER_PRESETS[type]
+    const preset = providers[type]
     if (preset) {
       setBaseUrl(preset.baseUrl)
       if (preset.teacherModel) setTeacherModel(preset.teacherModel)
@@ -185,15 +96,10 @@ export function Welcome({ api }: { api: WelcomeApi }) {
   }
 
   function handleStep1Next() {
-    const preset = PROVIDER_PRESETS[providerType]
+    const preset = providers[providerType]
     const keyRequired = preset ? preset.keyRequired : true
 
-    if (isOpenAI && SHOW_OPENAI_OAUTH) {
-      if (!oauthAccount && !apiKey.trim()) {
-        setError('Please log in with your OpenAI subscription or enter an API key.')
-        return
-      }
-    } else if (keyRequired && !apiKey.trim()) {
+    if (keyRequired && !apiKey.trim()) {
       setError(`Please provide an API key for ${preset?.name ?? providerType}`)
       return
     }
@@ -225,13 +131,9 @@ export function Welcome({ api }: { api: WelcomeApi }) {
     setError('')
     setStatusMessage('Configuring Analog AI distillation proxy...')
 
-    const finalApiKey = isOpenAI && !apiKey.trim() && oauthAccount
-      ? 'oauth_subscription_active'
-      : apiKey.trim()
-
     const params: AnalogSetupParams = {
       providerType,
-      providerApiKey: finalApiKey,
+      providerApiKey: apiKey.trim(),
       providerBaseUrl: baseUrl.trim() || undefined,
       reasoningModel: teacherModel.trim(),
       fastModel: studentModel.trim(),
@@ -268,7 +170,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
     }
   }
 
-  const selectedPreset = PROVIDER_PRESETS[providerType] ?? DEFAULT_PRESET
+  const selectedPreset = providers[providerType] ?? FALLBACK_DEFAULT
   const showBaseUrl = providerType === 'custom' || providerType === 'ollama'
 
   return (
@@ -334,7 +236,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                   disabled={busy}
                   onChange={(e) => handleProviderChange(e.target.value)}
                 >
-                  {Object.entries(PROVIDER_PRESETS).map(([key, val]) => (
+                  {Object.entries(providers).map(([key, val]) => (
                     <option key={key} value={key}>
                       {val.name}
                     </option>
@@ -342,39 +244,9 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                 </select>
               </div>
 
-              {SHOW_OPENAI_OAUTH && isOpenAI && (
-                <div className="openai-subscription-card">
-                  <div className="openai-subscription-header">
-                    <div className="openai-subscription-title">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style={{ color: '#10a37f' }}>
-                        <path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.259 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7466-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1683a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4947zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.02 1.1683a.0757.0757 0 0 1-.071 0l-4.8303-2.7866A4.504 4.504 0 0 1 2.3408 7.872zm16.597 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.6669zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1635a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z" />
-                      </svg>
-                      <span>OpenAI Subscription (OAuth)</span>
-                    </div>
-                    <button
-                      type="button"
-                      className="openai-login-btn"
-                      onClick={handleOpenAILogin}
-                    >
-                      {oauthAccount ? 'Reconnect OpenAI' : 'Log in with OpenAI'}
-                    </button>
-                  </div>
-                  <p className="openai-desc">
-                    Connecting with OpenAI login uses your existing ChatGPT Plus, Pro, or Team subscription — substantially less costly than paying per token on the standard API.
-                  </p>
-                  {oauthAccount && (
-                    <div className="openai-connected-status">
-                      ✓ Connected as <strong>{oauthAccount}</strong> (auto-refreshing OAuth session)
-                    </div>
-                  )}
-                </div>
-              )}
-
               <div className="key-field">
                 <label htmlFor="key-input">
-                  {SHOW_OPENAI_OAUTH && isOpenAI
-                    ? (oauthAccount ? 'API Key (Optional with OpenAI Login)' : 'API Key (or Login Above)')
-                    : (selectedPreset.keyRequired ? 'API Key' : 'API Key (Optional)')}
+                  {selectedPreset.keyRequired ? 'API Key' : 'API Key (Optional)'}
                 </label>
                 <input
                   id="key-input"
@@ -382,11 +254,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                   autoComplete="new-password"
                   autoCapitalize="off"
                   spellCheck={false}
-                  placeholder={
-                    SHOW_OPENAI_OAUTH && isOpenAI && oauthAccount
-                      ? 'Optional (using OAuth subscription)'
-                      : (selectedPreset.keyRequired ? 'Enter your API key...' : 'Optional')
-                  }
+                  placeholder={selectedPreset.keyRequired ? 'Enter your API key...' : 'Optional'}
                   value={apiKey}
                   disabled={busy}
                   onChange={(e) => {
@@ -528,4 +396,3 @@ export function Welcome({ api }: { api: WelcomeApi }) {
     </>
   )
 }
-

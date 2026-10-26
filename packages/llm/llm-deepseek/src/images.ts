@@ -44,10 +44,10 @@ export async function prepareImages(
   if (!messages.some(message => contentHasImage(message.content))) return { messages, versions }
   const model = connection.models.find(entry => entry.id === modelId)
   if (model?.inputModalities?.includes('image') !== true || attachments === undefined) {
-    throw new LlmError('DeepSeek Messages image input requires a vision model and attachment service', 'UNSUPPORTED_CONTENT')
+    throw new LlmError('Analog AI Messages image input requires a vision model and attachment service', 'UNSUPPORTED_CONTENT')
   }
   if (messages.some(message => message.role !== 'user' && message.role !== 'tool' && contentHasImage(message.content))) {
-    throw new LlmError('DeepSeek Messages supports images only in user messages and tool results', 'UNSUPPORTED_CONTENT')
+    throw new LlmError('Analog AI Messages supports images only in user messages and tool results', 'UNSUPPORTED_CONTENT')
   }
   for (const message of messages) {
     for (const ref of imageRefs(message.content)) {
@@ -83,7 +83,7 @@ function assertImagesFit(
     block => (versions.get(block.attachment.attachmentId) as RequestImageAttachment).bytes)
   if (offloadImages > 0) {
     throw new LlmError(
-      `DeepSeek Messages ${representation} request images exceed the route budget; ${offloadImages} more oldest occurrence(s) must be offloaded.`,
+      `Analog AI Messages ${representation} request images exceed the route budget; ${offloadImages} more oldest occurrence(s) must be offloaded.`,
       IMAGE_OFFLOAD_REQUIRED_CODE,
       { offloadImages },
     )

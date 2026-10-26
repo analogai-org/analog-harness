@@ -22,7 +22,7 @@ export function providerErrorDetail(raw: unknown): string {
 export function providerError(raw: unknown, status: number | undefined, headers?: Headers): LlmError {
   const envelope = typeof raw === 'object' && raw !== null ? raw as Record<string, unknown> : {}
   const error = typeof envelope.error === 'object' && envelope.error !== null ? envelope.error as Record<string, unknown> : {}
-  const message = typeof error.message === 'string' ? error.message : `DeepSeek Messages request failed (${status ?? 'stream error'})`
+  const message = typeof error.message === 'string' ? error.message : `Analog AI Messages request failed (${status ?? 'stream error'})`
   const type = typeof error.type === 'string' ? error.type : ''
   const detail = `${type} ${typeof error.code === 'string' ? error.code : ''} ${message}`
   let code: string

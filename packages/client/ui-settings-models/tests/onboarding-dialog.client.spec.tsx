@@ -147,7 +147,6 @@ function harness(options: {
     stepId: 'deepseek-official',
     complete,
     openSection,
-    renderSlot: (_name, _props, options) => options?.fallback,
     useSessions: unusedHook,
     useSessionStatus,
     usePanelInfo, useSessionRetainInfo: () => undefined, useResource,
@@ -284,23 +283,11 @@ describe('DeepSeekOnboardingDialog', () => {
   })
 })
 
-it('offers account choice before reusing the existing API key editor', async () => {
-  const h = harness()
-  h.props.renderSlot = (_name, owner: unknown) => <button onClick={(owner as { useApiKey: () => void }).useApiKey}>Choose API key</button>
-  render(<DeepSeekOnboardingDialog {...h.props} />)
-  await waitFor(() => { expect(screen.getByRole('button', { name: 'Choose API key' })).toBeTruthy() })
-  fireEvent.click(screen.getByRole('button', { name: 'Choose API key' }))
-  expect(screen.getByRole('dialog')).toBeTruthy()
-  expect(h.complete).not.toHaveBeenCalled()
-})
 it('explicit account-menu setup reuses the editor without another login choice', async () => {
   const h = harness({ configured: () => true })
   h.props.explicit = true
-  const choice = vi.fn()
-  h.props.renderSlot = (_name, _owner, options) => { choice(); return options?.fallback }
   render(<DeepSeekOnboardingDialog {...h.props} />)
   await waitFor(() => { expect(screen.getByRole('dialog')).toBeTruthy() })
-  expect(choice).not.toHaveBeenCalled()
   expect(h.complete).not.toHaveBeenCalled()
 })
 

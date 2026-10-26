@@ -86,13 +86,17 @@ export type WelcomeApi = DesktopLocale & WelcomeOperations & {
 export interface WelcomeAuthentication {
   readonly loggedIn: boolean
   readonly hasApiKey: boolean
+  readonly hasMicroserviceModels?: boolean
 }
 
 /**
  * Decide whether a startup or sign-out requires the welcome entry.
  * @param authentication - current account and independently stored API-key facts.
- * @returns true only when neither authentication route is configured.
+ * @returns true only when neither authentication route is configured or chat microservice models are not setup.
  */
 export function needsWelcome(authentication: WelcomeAuthentication): boolean {
+  if (!authentication.hasMicroserviceModels) {
+    return true
+  }
   return !authentication.loggedIn && !authentication.hasApiKey
 }

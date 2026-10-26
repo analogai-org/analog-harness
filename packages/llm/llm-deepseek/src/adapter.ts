@@ -60,10 +60,10 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
         yield next.value
       }
     } catch (error) {
-      if (timeoutOf(watchdog.signal, 'MESSAGES_IDLE') !== undefined) throw new LlmError('DeepSeek Messages stream idle timeout', 'TIMEOUT', { cause: error })
-      if (options.signal?.aborted) throw new LlmError('DeepSeek Messages request aborted', 'ABORTED', { cause: error })
+      if (timeoutOf(watchdog.signal, 'MESSAGES_IDLE') !== undefined) throw new LlmError('Analog AI Messages stream idle timeout', 'TIMEOUT', { cause: error })
+      if (options.signal?.aborted) throw new LlmError('Analog AI Messages request aborted', 'ABORTED', { cause: error })
       if (error instanceof LlmError) throw error
-      throw new LlmError('DeepSeek Messages transport failed', 'TRANSPORT', { cause: error })
+      throw new LlmError('Analog AI Messages transport failed', 'TRANSPORT', { cause: error })
     } finally {
       consumer.abort()
       try { await iterator.return(undefined) } catch (_abortedRequestCleanup) {
@@ -76,8 +76,23 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
     options: GenerateOptions, connection: C, signal: AbortSignal, activity: () => void,
   ): AsyncGenerator<StreamChunk> {
     signal.throwIfAborted()
+    // The chat microservice handles conversation history and memory internally.
+    // Send only the latest message turn (or consecutive trailing tool messages) from the harness.
+    let outgoingMessages = options.messages
+    if (options.messages.length > 0) {
+      const last = options.messages[options.messages.length - 1]!
+      if (last.role === 'tool') {
+        let i = options.messages.length - 1
+        while (i >= 0 && options.messages[i]!.role === 'tool') {
+          i--
+        }
+        outgoingMessages = options.messages.slice(i + 1)
+      } else {
+        outgoingMessages = [last]
+      }
+    }
     const { messages, versions } = await prepareImages(
-      options.messages, connection, options.model, this.dependencies.resolveAttachments?.(), this.imageAccess, signal,
+      outgoingMessages, connection, options.model, this.dependencies.resolveAttachments?.(), this.imageAccess, signal,
     )
     const auth = await this.dependencies.resolveAuth(connection)
     try {
@@ -143,7 +158,7 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
           throw new LlmError(message, failure.code, { ...failure.failure, cause: new Error(text) })
         }
         await extensions.accept()
-        if (response.body === null) throw new LlmError('DeepSeek Messages returned no response body', 'EMPTY_RESPONSE')
+        if (response.body === null) throw new LlmError('Analog AI Messages returned no response body', 'EMPTY_RESPONSE')
         yield* translate(parseSse(response.body, activity), options.model)
         return
       }

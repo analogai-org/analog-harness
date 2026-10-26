@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
+import { useEffect, useState, useCallback, type ReactNode } from 'react'
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
@@ -46,24 +46,23 @@ interface ProviderPreset {
   name: string
   baseUrl: string
   keyHint: string
-  oauth?: boolean
 }
 
 const PRESETS: ProviderPreset[] = [
-  { id: 'openai', name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', keyHint: 'sk-...', oauth: true },
-  { id: 'anthropic', name: 'Anthropic', baseUrl: 'https://api.anthropic.com/v1', keyHint: 'sk-ant-...' },
-  { id: 'gemini', name: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', keyHint: 'AIzaSy...' },
-  { id: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', keyHint: 'sk-...' },
-  { id: 'groq', name: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', keyHint: 'gsk_...' },
-  { id: 'mistral', name: 'Mistral AI', baseUrl: 'https://api.mistral.ai/v1', keyHint: '...' },
-  { id: 'together', name: 'Together AI', baseUrl: 'https://api.together.xyz/v1', keyHint: '...' },
-  { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', keyHint: 'sk-or-...' },
-  { id: 'perplexity', name: 'Perplexity', baseUrl: 'https://api.perplexity.ai', keyHint: 'pplx-...' },
-  { id: 'cohere', name: 'Cohere', baseUrl: 'https://api.cohere.com/v2', keyHint: '...' },
-  { id: 'fireworks', name: 'Fireworks AI', baseUrl: 'https://api.fireworks.ai/inference/v1', keyHint: 'fw_...' },
-  { id: 'xai', name: 'xAI (Grok)', baseUrl: 'https://api.x.ai/v1', keyHint: 'xai-...' },
-  { id: 'cerebras', name: 'Cerebras', baseUrl: 'https://api.cerebras.ai/v1', keyHint: 'csk-...' },
-  { id: 'sambanova', name: 'SambaNova', baseUrl: 'https://api.sambanova.ai/v1', keyHint: '...' },
+  { id: 'openai', name: 'OpenAI', baseUrl: '', keyHint: 'sk-...' },
+  { id: 'anthropic', name: 'Anthropic', baseUrl: '', keyHint: 'sk-ant-...' },
+  { id: 'gemini', name: 'Google Gemini', baseUrl: '', keyHint: 'AIzaSy...' },
+  { id: 'deepseek', name: 'DeepSeek', baseUrl: '', keyHint: 'sk-...' },
+  { id: 'groq', name: 'Groq', baseUrl: '', keyHint: 'gsk_...' },
+  { id: 'mistral', name: 'Mistral AI', baseUrl: '', keyHint: '...' },
+  { id: 'together', name: 'Together AI', baseUrl: '', keyHint: '...' },
+  { id: 'openrouter', name: 'OpenRouter', baseUrl: '', keyHint: 'sk-or-...' },
+  { id: 'perplexity', name: 'Perplexity', baseUrl: '', keyHint: 'pplx-...' },
+  { id: 'cohere', name: 'Cohere', baseUrl: '', keyHint: '...' },
+  { id: 'fireworks', name: 'Fireworks AI', baseUrl: '', keyHint: 'fw_...' },
+  { id: 'xai', name: 'xAI (Grok)', baseUrl: '', keyHint: 'xai-...' },
+  { id: 'cerebras', name: 'Cerebras', baseUrl: '', keyHint: 'csk-...' },
+  { id: 'sambanova', name: 'SambaNova', baseUrl: '', keyHint: '...' },
   { id: 'ollama', name: 'Ollama (Local)', baseUrl: 'http://localhost:11434/v1', keyHint: 'None or ollama' },
   { id: 'vllm', name: 'vLLM / Local Server', baseUrl: 'http://localhost:8000/v1', keyHint: 'None or token' },
   { id: 'custom', name: 'Custom OpenAI-Compatible', baseUrl: '', keyHint: '...' },
@@ -106,10 +105,6 @@ export function ModelsSection(_props?: ModelsSectionProps) {
   const [loading, setLoading] = useState<boolean>(true)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
-  // OpenAI OAuth status
-  const [oauthConnected, setOauthConnected] = useState<boolean>(false)
-  const oauthPollRef = useRef<any>(null)
-
   // Provider Modal state
   const [providerModalOpen, setProviderModalOpen] = useState<boolean>(false)
   const [editingProvider, setEditingProvider] = useState<ProviderItem | null>(null)
@@ -129,18 +124,6 @@ export function ModelsSection(_props?: ModelsSectionProps) {
 
   // Delete Provider confirm modal
   const [deletingProviderId, setDeletingProviderId] = useState<string | null>(null)
-
-  const checkOAuthStatus = useCallback(async () => {
-    try {
-      const res = await fetch(`${CHAT_BASE_URL}/auth/openai/status`)
-      if (res.ok) {
-        const data = await res.json()
-        setOauthConnected(Boolean(data.authenticated || data.has_token || data.logged_in || data.connected))
-      }
-    } catch {
-      // Chat backend may be offline
-    }
-  }, [])
 
   const loadData = useCallback(async () => {
     try {
@@ -163,64 +146,54 @@ export function ModelsSection(_props?: ModelsSectionProps) {
       }
 
       // 2. Fetch providers for active agent
+      let loadedProviders: ProviderItem[] = []
       const provRes = await fetch(`${CHAT_BASE_URL}/v1/agents/${currentAgentId}/providers`)
       if (provRes.ok) {
         const provData = await provRes.json()
-        setProviders(Array.isArray(provData) ? provData : provData.providers || [])
+        loadedProviders = Array.isArray(provData) ? provData : provData.providers || []
+        setProviders(loadedProviders)
       }
 
       // 3. Fetch models for active agent
+      let loadedModels: ModelItem[] = []
       const modRes = await fetch(`${CHAT_BASE_URL}/v1/agents/${currentAgentId}/models`)
       if (modRes.ok) {
         const modData = await modRes.json()
-        setModels(Array.isArray(modData) ? modData : modData.models || [])
+        loadedModels = Array.isArray(modData) ? modData : modData.models || []
+        setModels(loadedModels)
       }
 
-      // 4. Check OAuth
-      await checkOAuthStatus()
+      // Sync to localStorage and notify other UI components
+      try {
+        const configuredList: Array<{ id: string; name: string; provider: string; category?: string }> = []
+        for (const m of loadedModels) {
+          const p = loadedProviders.find(pr => pr.id === m.provider_id)
+          const pName = p ? (p.display_name || p.name) : (m.provider_id || 'custom')
+          const mName = m.name || m.model_name || m.id
+          if (mName && mName !== 'Not Configured') {
+            configuredList.push({
+              id: m.id || mName,
+              name: mName,
+              provider: pName.toLowerCase(),
+              category: m.type || m.model_type || 'default',
+            })
+          }
+        }
+        localStorage.setItem('analog_configured_models', JSON.stringify(configuredList))
+        window.dispatchEvent(new CustomEvent('analog-models-updated'))
+      } catch {
+        // ignore
+      }
     } catch (err: any) {
       setErrorMsg(`Could not connect to Chat backend at ${CHAT_BASE_URL}. Ensure chat service is running.`)
     } finally {
       setLoading(false)
     }
-  }, [activeAgentId, checkOAuthStatus])
+  }, [activeAgentId])
 
   useEffect(() => {
     loadData()
   }, [loadData])
-
-  // OAuth polling cleanup
-  useEffect(() => {
-    return () => {
-      if (oauthPollRef.current) clearInterval(oauthPollRef.current)
-    }
-  }, [])
-
-  const handleStartOAuth = () => {
-    const width = 600
-    const height = 700
-    const left = window.screenX + (window.outerWidth - width) / 2
-    const top = window.screenY + (window.outerHeight - height) / 2
-    window.open(
-      `${CHAT_BASE_URL}/auth/openai/login?return_to=popup`,
-      'OpenAI_OAuth',
-      `width=${width},height=${height},left=${left},top=${top}`
-    )
-
-    if (oauthPollRef.current) clearInterval(oauthPollRef.current)
-    oauthPollRef.current = setInterval(async () => {
-      try {
-        const res = await fetch(`${CHAT_BASE_URL}/auth/openai/status`)
-        if (res.ok) {
-          const data = await res.json()
-          if (data.authenticated || data.has_token || data.logged_in || data.connected) {
-            setOauthConnected(true)
-            if (oauthPollRef.current) clearInterval(oauthPollRef.current)
-          }
-        }
-      } catch {}
-    }, 2000)
-  }
 
   // --- Provider Modal Actions ---
   const openAddProviderModal = () => {
@@ -329,7 +302,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
       setSelectedMaxTokens(maxTok ? String(maxTok) : '')
     } else {
       setSelectedProviderId(providers[0]?.id || '')
-      setSelectedModelName(modelType === 'reasoning' ? 'gpt-4o' : 'gpt-4o-mini')
+      setSelectedModelName('')
       setSelectedMaxTokens('')
     }
     setModelModalOpen(true)
@@ -449,20 +422,19 @@ export function ModelsSection(_props?: ModelsSectionProps) {
                     </td>
                     <td className={`${styles.td} ${styles.actionsCell}`}>
                       <div className={styles.actionButtonGroup}>
-                        <button
-                          type="button"
-                          className={styles.editButton}
+                        <Button
+                          variant="outline"
                           onClick={() => openEditProviderModal(p)}
                         >
                           Edit
-                        </button>
-                        <button
-                          type="button"
+                        </Button>
+                        <Button
+                          variant="ghost"
                           className={styles.deleteButton}
                           onClick={() => setDeletingProviderId(p.id)}
                         >
                           Delete
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -489,13 +461,12 @@ export function ModelsSection(_props?: ModelsSectionProps) {
           <div className={styles.modelCard}>
             <div className={styles.cardHeader}>
               <span className={styles.badge}>Reasoning Model</span>
-              <button
-                type="button"
-                className={styles.editButton}
+              <Button
+                variant="outline"
                 onClick={() => openEditModelModal('reasoning')}
               >
                 Edit
-              </button>
+              </Button>
             </div>
             <div className={styles.modelVal}>
               {getModelName(reasoningModel)}
@@ -517,13 +488,12 @@ export function ModelsSection(_props?: ModelsSectionProps) {
           <div className={styles.modelCard}>
             <div className={styles.cardHeader}>
               <span className={styles.badge}>Fast Model</span>
-              <button
-                type="button"
-                className={styles.editButton}
+              <Button
+                variant="outline"
                 onClick={() => openEditModelModal('fast')}
               >
                 Edit
-              </button>
+              </Button>
             </div>
             <div className={styles.modelVal}>
               {getModelName(fastModel)}
@@ -578,27 +548,8 @@ export function ModelsSection(_props?: ModelsSectionProps) {
               />
             </div>
 
-            {providerPreset === 'openai' && (
-              <div className={styles.oauthCard}>
-                <div className={styles.oauthTitle}>OpenAI OAuth Integration</div>
-                <div className={styles.oauthText}>
-                  You can sign in with your OpenAI account directly without manually generating an API key.
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-                  <Button variant="ghost" onClick={handleStartOAuth}>
-                    Sign in with OpenAI
-                  </Button>
-                  <div className={oauthConnected ? styles.oauthStatus : styles.oauthText}>
-                    {oauthConnected ? '✓ OAuth Connected' : 'Not signed in'}
-                  </div>
-                </div>
-              </div>
-            )}
-
             <div className={styles.formGroup}>
-              <label className={styles.formLabel}>
-                API Key {providerPreset === 'openai' && oauthConnected && '(Optional when OAuth connected)'}
-              </label>
+              <label className={styles.formLabel}>API Key</label>
               <input
                 className={styles.formInput}
                 type="password"
@@ -609,16 +560,18 @@ export function ModelsSection(_props?: ModelsSectionProps) {
               <span className={styles.formHelp}>Your key is securely saved directly in your Chat backend.</span>
             </div>
 
-            <div className={styles.formGroup}>
-              <label className={styles.formLabel}>Base URL</label>
-              <input
-                className={styles.formInput}
-                type="text"
-                value={providerBaseUrl}
-                onChange={e => setProviderBaseUrl(e.target.value)}
-                placeholder="https://api.openai.com/v1"
-              />
-            </div>
+            {(providerPreset === 'custom' || providerPreset === 'ollama' || providerPreset === 'vllm') && (
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Base URL</label>
+                <input
+                  className={styles.formInput}
+                  type="text"
+                  value={providerBaseUrl}
+                  onChange={e => setProviderBaseUrl(e.target.value)}
+                  placeholder={providerPreset === 'ollama' ? 'http://localhost:11434/v1' : 'https://...'}
+                />
+              </div>
+            )}
 
             <div className={styles.modalActions}>
               <Button variant="ghost" onClick={() => setProviderModalOpen(false)}>
@@ -653,7 +606,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
                 ) : (
                   providers.map(p => (
                     <option key={p.id} value={p.id}>
-                      {p.name} ({p.base_url})
+                      {p.display_name || p.name}
                     </option>
                   ))
                 )}

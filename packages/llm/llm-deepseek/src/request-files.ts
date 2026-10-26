@@ -14,7 +14,7 @@ export interface ImageWireLocation {
 /** A file upload failure eligible for request-wide inline fallback. */
 export class FileResolutionFailure extends Error {
   constructor(cause: unknown) {
-    super('DeepSeek Files API could not resolve a request image.', { cause })
+    super('Analog AI Files API could not resolve a request image.', { cause })
     this.name = 'FileResolutionFailure'
   }
 }
@@ -77,14 +77,14 @@ function normalizedImageDiagnostic(
   const exact = files.find(file => detailNamesFileId(providerDetail, file.fileId))
   const target = exact ?? (files.length === 1 ? files[0] : undefined)
   if (target !== undefined) {
-    return `DeepSeek rejected normalized image ${normalizedImageFacts(target)}: ${providerMessage}. `
+    return `Analog AI rejected normalized image ${normalizedImageFacts(target)}: ${providerMessage}. `
       + 'The provider rejected bytes already normalized by the harness; PNG, JPEG, WebP, and GIF remain supported input formats.'
   }
   const candidates = [...new Map(files.map(file => [
     `${file.version.variantId}\0${file.location.message}\0${file.location.image}`,
     file,
   ])).values()]
-  return `DeepSeek rejected a normalized request image: ${providerMessage}. Candidate images: `
+  return `Analog AI rejected a normalized request image: ${providerMessage}. Candidate images: `
     + `${candidates.map(normalizedImageFacts).join('; ')}. `
     + 'The provider rejected bytes already normalized by the harness; PNG, JPEG, WebP, and GIF remain supported input formats.'
 }

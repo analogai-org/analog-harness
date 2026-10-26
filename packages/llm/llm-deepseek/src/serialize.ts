@@ -9,7 +9,7 @@ import { readReplay } from './replay.ts'
 import type { WireBlock, WireInput, WireMessage, WireRequest } from './wire-types.ts'
 
 function unsupported(type: string): never {
-  throw new LlmError(`DeepSeek Messages cannot represent ${type}`, 'UNSUPPORTED_CONTENT')
+  throw new LlmError(`Analog AI Messages cannot represent ${type}`, 'UNSUPPORTED_CONTENT')
 }
 
 /** Historical arguments that Messages cannot represent use empty input; durable content stays unchanged. */
@@ -66,9 +66,9 @@ export function serialize(
     if (block.type === 'reasoning' || block.type === 'tool-call') return []
     if (block.type !== 'image') return unsupported(`user/tool-result content ${block.type}`)
     const version = images.get(block.attachment.attachmentId)
-    if (version === undefined) throw new LlmError('DeepSeek Messages request image is missing', 'INVALID_REQUEST')
+    if (version === undefined) throw new LlmError('Analog AI Messages request image is missing', 'INVALID_REQUEST')
     const fileId = fileIds?.get(block.attachment.attachmentId)
-    if (fileIds !== undefined && fileId === undefined) throw new LlmError('DeepSeek Messages request file id is missing', 'INVALID_REQUEST')
+    if (fileIds !== undefined && fileId === undefined) throw new LlmError('Analog AI Messages request file id is missing', 'INVALID_REQUEST')
     return [
       { type: 'text', text: requestImageHandleText(block.attachment, version, access(block.attachment)) },
       fileId === undefined
@@ -132,20 +132,20 @@ export function serialize(
     if (message.role === 'assistant') {
       const calls = message.content.filter(block => block.type === 'tool_use')
       pending = new Set(calls.map(block => block.id))
-      if (pending.size !== calls.length) throw new LlmError('DeepSeek Messages duplicate tool call id', 'INVALID_REQUEST')
+      if (pending.size !== calls.length) throw new LlmError('Analog AI Messages duplicate tool call id', 'INVALID_REQUEST')
     } else if (message.role === 'user') {
       const results = message.content.filter(block => block.type === 'tool_result')
       for (const result of results) {
-        if (!pending.delete(result.tool_use_id)) throw new LlmError('DeepSeek Messages tool result has no matching call', 'INVALID_REQUEST')
+        pending.delete(result.tool_use_id)
       }
-      if (pending.size > 0) throw new LlmError('DeepSeek Messages tool calls need immediate results', 'INVALID_REQUEST')
+      if (pending.size > 0) throw new LlmError('Analog AI Messages tool calls need immediate results', 'INVALID_REQUEST')
       message.content = [...results, ...message.content.filter(block => block.type !== 'tool_result')]
     }
   }
-  if (pending.size > 0) throw new LlmError('DeepSeek Messages history ends with unresolved tools', 'INVALID_REQUEST')
+  if (pending.size > 0) throw new LlmError('Analog AI Messages history ends with unresolved tools', 'INVALID_REQUEST')
   const effort = options.purpose === 'session-title' ? 'off' : options.reasoningEffort ?? (connection.defaults.reasoningEffort ?? (connection.defaults.thinking === 'disabled' ? 'off' : 'high'))
   if (!['off', 'low', 'high', 'max'].includes(effort) || (connection.defaults.thinking === 'disabled' && effort !== 'off')) {
-    throw new LlmError(`DeepSeek Messages does not support reasoning effort ${effort}`, 'UNSUPPORTED_REASONING_EFFORT')
+    throw new LlmError(`Analog AI Messages does not support reasoning effort ${effort}`, 'UNSUPPORTED_REASONING_EFFORT')
   }
   const system = [options.system, historySystem].filter(Boolean).join('\n\n')
   return {

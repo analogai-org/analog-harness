@@ -11,6 +11,7 @@ export interface WelcomeState {
   readonly hasApiKey: boolean
   readonly writable: boolean
   readonly localePreference: string | null
+  readonly hasMicroserviceModels?: boolean
 }
 
 /** Narrow operations available to the native welcome flow. */
@@ -123,11 +124,40 @@ export async function connectDesktopWelcome(
       Object.assign(states, batch)
     }
     if (ref !== undefined && !record(states[ref])) throw new Error('desktop welcome: missing credential metadata')
+
+    let hasMicroserviceModels = false
+    for (const url of ['http://127.0.0.1:8071/v1/agents/default', 'http://localhost:8071/v1/agents/default']) {
+      try {
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), 1000)
+        const [modelsRes, provRes] = await Promise.all([
+          fetch(`${url}/models`, { signal: controller.signal }),
+          fetch(`${url}/providers`, { signal: controller.signal }),
+        ])
+        clearTimeout(timer)
+        if (modelsRes.ok && provRes.ok) {
+          const modelsBody = (await modelsRes.json()) as unknown
+          const provBody = (await provRes.json()) as unknown
+          const modelsList = Array.isArray(modelsBody) ? modelsBody : (modelsBody as any)?.models || []
+          const provList = Array.isArray(provBody) ? provBody : (provBody as any)?.providers || []
+          const hasReasoning = modelsList.some((m: any) => (m.type === 'reasoning' || m.model_type === 'reasoning') && m.name)
+          const hasFast = modelsList.some((m: any) => (m.type === 'fast' || m.model_type === 'fast') && m.name)
+          if (hasReasoning && hasFast && provList.length > 0) {
+            hasMicroserviceModels = true
+            break
+          }
+        }
+      } catch {
+        // ignore and try next URL
+      }
+    }
+
     return {
       loggedIn: (await account.state()).status === 'credential-stored',
       hasApiKey: Object.values(states).some(value => record(value) && value.configured === true),
       writable: ref !== undefined && record(states[ref]) && states[ref].writable === true,
       localePreference: localePreference(namespaces),
+      hasMicroserviceModels,
     }
   }
   return {
@@ -157,24 +187,29 @@ export async function connectDesktopWelcome(
           console.warn('User init warning:', err)
         })
 
-        // 2. Create agent
-        const agentRes = await fetch(`${localChatUrl}/v1/agents`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: params.agentName || 'Analog AI Assistant',
-            description: 'Local Analog AI Agent with Teacher-Student optimization',
-          }),
-        })
+        const agentId = 'default'
 
-        if (!agentRes.ok) {
-          const errData = await agentRes.json().catch(() => ({}))
-          return { ok: false, error: (errData as { detail?: string }).detail || 'Failed to create agent on local server' }
+        // 2. Fetch or create default agent and get API key
+        const agentRes = await fetch(`${localChatUrl}/v1/agents/${agentId}`)
+        let agentApiKey = ''
+        if (agentRes.ok) {
+          const agentData = (await agentRes.json()) as { id: string; api_key?: string }
+          agentApiKey = agentData.api_key || ''
+        } else {
+          const createRes = await fetch(`${localChatUrl}/v1/agents`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: 'default',
+              name: params.agentName || 'Analog AI Assistant',
+              description: 'Local Analog AI Agent with Teacher-Student optimization',
+            }),
+          })
+          if (createRes.ok) {
+            const createData = (await createRes.json()) as { id: string; api_key?: string }
+            agentApiKey = createData.api_key || ''
+          }
         }
-
-        const agentData = (await agentRes.json()) as { id: string; api_key: string }
-        const agentId = agentData.id
-        const agentApiKey = agentData.api_key
 
         // 3. Attach upstream provider
         const providerRes = await fetch(`${localChatUrl}/v1/agents/${agentId}/providers`, {
