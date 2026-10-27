@@ -20,7 +20,7 @@ const pnpmCmd = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 
 function run(cmd, args, cwd) {
   console.log(`[prepare-analog] Running: ${cmd} ${args.join(' ')} in ${cwd}`)
-  execFileSync(cmd, args, { cwd, stdio: 'inherit', env: process.env })
+  execFileSync(cmd, args, { cwd, stdio: 'inherit', env: process.env, shell: process.platform === 'win32' })
 }
 
 // 1. Pack dsh packages and desktop-host
