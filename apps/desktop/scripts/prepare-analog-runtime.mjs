@@ -23,7 +23,8 @@ function run(cmd, args, cwd) {
   execFileSync(cmd, args, { cwd, stdio: 'inherit', env: process.env })
 }
 
-// 1. Pack desktop-host
+// 1. Pack dsh packages and desktop-host
+run(pnpmCmd, ['run', 'release:pack', '--family', 'dsh', '--out', buildPaths.packedDsh], repoRoot)
 run(pnpmCmd, ['--dir', 'apps/desktop-host', 'pack', '--pack-destination', buildPaths.packedDsh], repoRoot)
 
 // 2. Pack vendor packages
