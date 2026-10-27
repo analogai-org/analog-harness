@@ -29,14 +29,20 @@ jobs:
         include:
           - os: macos-14
             target: mac-arm64
+            dsh_platform: darwin
+            dsh_arch: arm64
             builder_flag: --mac --arm64
             artifact_pattern: "analog-harness/apps/desktop/release-builds/*.{dmg,zip}"
           - os: macos-13
             target: mac-x64
+            dsh_platform: darwin
+            dsh_arch: x64
             builder_flag: --mac --x64
             artifact_pattern: "analog-harness/apps/desktop/release-builds/*.{dmg,zip}"
           - os: windows-latest
             target: win-x64
+            dsh_platform: win32
+            dsh_arch: x64
             builder_flag: --win --x64
             artifact_pattern: "analog-harness/apps/desktop/release-builds/*.{exe,zip,blockmap}"
 
@@ -133,6 +139,9 @@ jobs:
 
       - name: Prepare Analog Embedded Runtime & Packages
         working-directory: analog-harness/apps/desktop
+        env:
+          DSH_DESKTOP_TARGET_PLATFORM: ${{ matrix.dsh_platform }}
+          DSH_DESKTOP_TARGET_ARCH: ${{ matrix.dsh_arch }}
         run: |
           pnpm run prepare:analog
 
@@ -141,8 +150,55 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
           DSH_DESKTOP_APP_ID: 'ai.analog.desktop'
+          DSH_DESKTOP_TARGET_PLATFORM: ${{ matrix.dsh_platform }}
+          DSH_DESKTOP_TARGET_ARCH: ${{ matrix.dsh_arch }}
         run: |
           pnpm exec electron-builder --config analog-builder.config.mjs ${{ matrix.builder_flag }}
+
+      - name: Verify ASAR and Packaging Integrity
+        working-directory: analog-harness/apps/desktop
+        run: |
+          node -e '
+          const fs = require("fs");
+          const path = require("path");
+          const { execSync } = require("child_process");
+
+          const releaseDir = path.join(process.cwd(), "release-builds");
+          console.log("[Verify] Inspecting release output in:", releaseDir);
+          if (!fs.existsSync(releaseDir)) {
+            console.error("FATAL: release-builds directory does not exist!");
+            process.exit(1);
+          }
+          const files = fs.readdirSync(releaseDir);
+          console.log("[Verify] Generated files:", files);
+
+          // Find mac app or win unpacked directory if present
+          const macApp = files.find(f => f.endsWith("-mac") || f.endsWith("-arm64") || f.endsWith("-x64"));
+          const winUnpacked = path.join(releaseDir, "win-unpacked");
+
+          let asarPath = null;
+          if (fs.existsSync(path.join(releaseDir, "mac-arm64", "Analog.app", "Contents", "Resources", "app.asar"))) {
+            asarPath = path.join(releaseDir, "mac-arm64", "Analog.app", "Contents", "Resources", "app.asar");
+          } else if (fs.existsSync(path.join(releaseDir, "mac", "Analog.app", "Contents", "Resources", "app.asar"))) {
+            asarPath = path.join(releaseDir, "mac", "Analog.app", "Contents", "Resources", "app.asar");
+          } else if (fs.existsSync(path.join(winUnpacked, "resources", "app.asar"))) {
+            asarPath = path.join(winUnpacked, "resources", "app.asar");
+          }
+
+          if (asarPath && fs.existsSync(asarPath)) {
+            console.log("[Verify] Checking ASAR contents at:", asarPath);
+            try {
+              const asarList = execSync(`npx @electron/asar list "${asarPath}"`, { encoding: "utf8" });
+              if (!asarList.includes("dsh/desktop-runtime.json") && !asarList.includes("desktop-runtime.json")) {
+                console.error("FATAL: desktop-runtime.json IS MISSING FROM app.asar!");
+                process.exit(1);
+              }
+              console.log("[Verify] SUCCESS: dsh/desktop-runtime.json found inside app.asar!");
+            } catch (err) {
+              console.warn("[Verify] Warning running asar list:", err.message);
+            }
+          }
+          '
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4

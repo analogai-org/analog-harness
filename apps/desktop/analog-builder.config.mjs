@@ -7,21 +7,24 @@ const root = fileURLToPath(new URL('.', import.meta.url))
 const chatServiceDistPath = fileURLToPath(new URL('../../../chat/dist/analog-chat-service', import.meta.url))
 const chatServiceWinDistPath = fileURLToPath(new URL('../../../chat/dist/analog-chat-service-win/analog-chat-service', import.meta.url))
 const chatMainDistPath = fileURLToPath(new URL('../../../chat/dist/main.dist', import.meta.url))
-const resolvedChatPath = existsSync(chatServiceDistPath) ? chatServiceDistPath : chatMainDistPath
 
-const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+const targetName = resolveDesktopBuildTarget(process.env, process.platform, process.arch)
+const buildPaths = desktopTargetBuildPaths(targetName)
+const dshTargetRoot = buildPaths.dsh
+const runtimeTargetRoot = buildPaths.runtime
 
-let dshTargetRoot
-let runtimeTargetRoot
-try {
-  const targetName = resolveDesktopBuildTarget()
-  const buildPaths = desktopTargetBuildPaths(targetName)
-  dshTargetRoot = buildPaths.dsh
-  runtimeTargetRoot = buildPaths.runtime
-} catch {
-  dshTargetRoot = join(root, '.desktop-build/targets/mac-arm64/dsh')
-  runtimeTargetRoot = join(root, '.desktop-build/targets/mac-arm64/runtime')
+// Critical integrity checks: abort immediately if dependencies were not prepared
+const runtimeDescriptorPath = join(dshTargetRoot, 'desktop-runtime.json')
+if (!existsSync(runtimeDescriptorPath)) {
+  throw new Error(`[analog-builder] CRITICAL ERROR: desktop-runtime.json not found at ${runtimeDescriptorPath}. You must run 'pnpm run prepare:analog' before packaging.`)
 }
+if (!existsSync(runtimeTargetRoot)) {
+  throw new Error(`[analog-builder] CRITICAL ERROR: runtime directory not found at ${runtimeTargetRoot}. You must run 'pnpm run prepare:analog' before packaging.`)
+}
+
+const resolvedChatPath = existsSync(chatServiceWinDistPath)
+  ? chatServiceWinDistPath
+  : (existsSync(chatServiceDistPath) ? chatServiceDistPath : (existsSync(chatMainDistPath) ? chatMainDistPath : undefined))
 
 /** @type {import('electron-builder').Configuration} */
 const config = {
@@ -44,15 +47,18 @@ const config = {
     'lib/**/*',
     'renderer/**/*',
     'package.json',
-    ...(existsSync(dshTargetRoot) ? [
-      { from: dshTargetRoot, to: 'dsh', filter: ['**/*'] },
-      { from: join(dshTargetRoot, 'node_modules'), to: 'dsh/node_modules', filter: ['**/*'] },
-    ] : []),
+    { from: dshTargetRoot, to: 'dsh', filter: ['**/*'] },
+    { from: join(dshTargetRoot, 'node_modules'), to: 'dsh/node_modules', filter: ['**/*'] },
   ],
   extraResources: [
-    ...(existsSync(runtimeTargetRoot) ? [{
+    {
       from: runtimeTargetRoot,
       to: 'runtime',
+      filter: ['**/*'],
+    },
+    ...(resolvedChatPath ? [{
+      from: resolvedChatPath,
+      to: 'analog-chat-service',
       filter: ['**/*'],
     }] : []),
     {
@@ -72,13 +78,6 @@ const config = {
       { target: 'zip', arch: ['arm64', 'x64'] },
     ],
     identity: null,
-    extraResources: [
-      ...(existsSync(chatServiceDistPath) ? [{
-        from: chatServiceDistPath,
-        to: 'analog-chat-service',
-        filter: ['**/*'],
-      }] : []),
-    ],
   },
   dmg: {
     title: 'Analog Installer',
@@ -92,17 +91,6 @@ const config = {
     target: [
       { target: 'nsis', arch: ['x64'] },
       { target: 'zip', arch: ['x64'] },
-    ],
-    extraResources: [
-      ...(existsSync(chatServiceWinDistPath) ? [{
-        from: chatServiceWinDistPath,
-        to: 'analog-chat-service',
-        filter: ['**/*'],
-      }] : (existsSync(resolvedChatPath) ? [{
-        from: resolvedChatPath,
-        to: 'analog-chat-service',
-        filter: ['**/*'],
-      }] : [])),
     ],
   },
   nsis: {
