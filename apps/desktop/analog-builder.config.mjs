@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
+import { desktopTargetBuildPaths, resolveDesktopBuildTarget } from './scripts/desktop-build-paths.mjs'
 
 const root = fileURLToPath(new URL('.', import.meta.url))
 const chatServiceDistPath = fileURLToPath(new URL('../../../chat/dist/analog-chat-service', import.meta.url))
@@ -9,8 +10,18 @@ const chatMainDistPath = fileURLToPath(new URL('../../../chat/dist/main.dist', i
 const resolvedChatPath = existsSync(chatServiceDistPath) ? chatServiceDistPath : chatMainDistPath
 
 const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
-const dshTargetRoot = join(root, '.desktop-build/targets/mac-arm64/dsh')
-const runtimeTargetRoot = join(root, '.desktop-build/targets/mac-arm64/runtime')
+
+let dshTargetRoot
+let runtimeTargetRoot
+try {
+  const targetName = resolveDesktopBuildTarget()
+  const buildPaths = desktopTargetBuildPaths(targetName)
+  dshTargetRoot = buildPaths.dsh
+  runtimeTargetRoot = buildPaths.runtime
+} catch {
+  dshTargetRoot = join(root, '.desktop-build/targets/mac-arm64/dsh')
+  runtimeTargetRoot = join(root, '.desktop-build/targets/mac-arm64/runtime')
+}
 
 /** @type {import('electron-builder').Configuration} */
 const config = {

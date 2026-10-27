@@ -124,8 +124,12 @@ jobs:
       - name: Build Harness Libraries and Desktop Bundle
         working-directory: analog-harness
         run: |
-          pnpm run build:lib
-          pnpm run build:desktop
+          pnpm run build:official
+
+      - name: Prepare Analog Embedded Runtime & Packages
+        working-directory: analog-harness/apps/desktop
+        run: |
+          pnpm run prepare:analog
 
       - name: Package Desktop Installer (DMG / EXE)
         working-directory: analog-harness/apps/desktop
