@@ -10,6 +10,11 @@ on:
         description: 'Release tag (e.g. v1.0.0)'
         required: false
         default: 'latest'
+      prerelease:
+        description: 'Publish as Pre-release (for testing before public launch)'
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: write
@@ -167,7 +172,7 @@ jobs:
           tag_name: ${{ github.ref_name != '' && github.ref_name || inputs.release_tag }}
           name: Release ${{ github.ref_name != '' && github.ref_name || inputs.release_tag }}
           draft: false
-          prerelease: false
+          prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || true }}
           files: |
             artifacts/**/*.dmg
             artifacts/**/*.exe
