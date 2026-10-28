@@ -35,12 +35,6 @@ jobs:
             dsh_arch: arm64
             builder_flag: --mac --arm64
             artifact_pattern: "analog-harness/apps/desktop/release-builds/*.{dmg,zip}"
-          - os: macos-13
-            target: mac-x64
-            dsh_platform: darwin
-            dsh_arch: x64
-            builder_flag: --mac --x64
-            artifact_pattern: "analog-harness/apps/desktop/release-builds/*.{dmg,zip}"
           - os: windows-latest
             target: win-x64
             dsh_platform: win32
