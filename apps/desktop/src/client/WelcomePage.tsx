@@ -12,28 +12,19 @@ interface ProviderPreset {
   keyRequired: boolean
 }
 
-const FALLBACK_DEFAULT: ProviderPreset = {
-  name: 'DeepSeek',
-  baseUrl: 'https://api.deepseek.com',
-  teacherModel: 'deepseek-reasoner',
-  studentModel: 'deepseek-chat',
-  keyRequired: true,
-}
-
 export function Welcome({ api }: { api: WelcomeApi }) {
   // Step 0: Welcome overview with "Start Configuration" button
   // Step 1: Add Providers
   // Step 2: Add Teacher & Student models
   const [step, setStep] = useState<0 | 1 | 2>(0)
-  const [providers, setProviders] = useState<Record<string, ProviderPreset>>({
-    deepseek: FALLBACK_DEFAULT,
-  })
+  const [providers, setProviders] = useState<Record<string, ProviderPreset>>({})
+  const [loadingProviders, setLoadingProviders] = useState(true)
 
-  const [providerType, setProviderType] = useState('deepseek')
+  const [providerType, setProviderType] = useState('')
   const [apiKey, setApiKey] = useState('')
-  const [baseUrl, setBaseUrl] = useState(FALLBACK_DEFAULT.baseUrl)
-  const [teacherModel, setTeacherModel] = useState(FALLBACK_DEFAULT.teacherModel)
-  const [studentModel, setStudentModel] = useState(FALLBACK_DEFAULT.studentModel)
+  const [baseUrl, setBaseUrl] = useState('')
+  const [teacherModel, setTeacherModel] = useState('')
+  const [studentModel, setStudentModel] = useState('')
 
   const [busy, setBusy] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
@@ -44,43 +35,60 @@ export function Welcome({ api }: { api: WelcomeApi }) {
     mounted.current = true
     document.title = 'Analog AI Harness Setup'
 
-    // Fetch dynamic available providers from chat microservice localhost:8071
-    fetch('http://localhost:8071/available-providers')
-      .catch(() => fetch('http://localhost:8071/v1/available-providers'))
-      .then((res) => {
-        if (res && res.ok) return res.json()
-        throw new Error('Failed to fetch providers')
-      })
-      .then((data) => {
-        if (data && Array.isArray(data.providers) && data.providers.length > 0) {
-          const map: Record<string, ProviderPreset> = {}
-          for (const p of data.providers) {
-            map[p.id] = {
-              name: p.name,
-              baseUrl: p.baseUrl || p.base_url || '',
-              teacherModel: p.teacherModel || p.teacher_model || '',
-              studentModel: p.studentModel || p.student_model || '',
-              keyRequired: p.keyRequired ?? p.key_required ?? true,
+    let pollTimer: ReturnType<typeof setTimeout> | undefined
+
+    // Continuously poll available providers from chat microservice until ready
+    async function fetchProviders() {
+      try {
+        let res = await fetch('http://localhost:8071/available-providers').catch(() => null)
+        if (!res || !res.ok) {
+          res = await fetch('http://localhost:8071/v1/available-providers').catch(() => null)
+        }
+        if (res && res.ok) {
+          const data = await res.json()
+          if (data && Array.isArray(data.providers) && data.providers.length > 0) {
+            const map: Record<string, ProviderPreset> = {}
+            for (const p of data.providers) {
+              map[p.id] = {
+                name: p.name,
+                baseUrl: p.baseUrl || p.base_url || '',
+                teacherModel: p.teacherModel || p.teacher_model || '',
+                studentModel: p.studentModel || p.student_model || '',
+                keyRequired: p.keyRequired ?? p.key_required ?? true,
+              }
             }
-          }
-          if (mounted.current) {
-            setProviders(map)
-            // If the currently selected provider is present in map, sync its values if not edited
-            const active = map[providerType] || map[data.providers[0].id]
-            if (active && !apiKey) {
-              setBaseUrl(active.baseUrl)
-              setTeacherModel(active.teacherModel)
-              setStudentModel(active.studentModel)
+            if (mounted.current) {
+              setProviders(map)
+              setLoadingProviders(false)
+              setProviderType((prev) => {
+                const nextType = map[prev] ? prev : data.providers[0].id
+                const active = map[nextType]
+                if (active) {
+                  setBaseUrl((b) => b || active.baseUrl)
+                  setTeacherModel((t) => t || active.teacherModel)
+                  setStudentModel((s) => s || active.studentModel)
+                }
+                return nextType
+              })
+              return // Successfully retrieved providers, stop polling
             }
           }
         }
-      })
-      .catch((err) => {
+      } catch (err) {
         console.warn('Could not fetch available providers from microservice:', err)
-      })
+      }
+
+      // Retry if microservice is still starting up
+      if (mounted.current) {
+        pollTimer = setTimeout(fetchProviders, 1500)
+      }
+    }
+
+    void fetchProviders()
 
     return () => {
       mounted.current = false
+      if (pollTimer) clearTimeout(pollTimer)
     }
   }, [])
 
@@ -170,7 +178,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
     }
   }
 
-  const selectedPreset = providers[providerType] ?? FALLBACK_DEFAULT
+  const selectedPreset = providers[providerType]
   const showBaseUrl = providerType === 'custom' || providerType === 'ollama'
 
   return (
@@ -228,58 +236,68 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                 <p>Choose your provider and configure API credentials</p>
               </header>
 
-              <div className="key-field">
-                <label htmlFor="provider-select">Provider</label>
-                <select
-                  id="provider-select"
-                  value={providerType}
-                  disabled={busy}
-                  onChange={(e) => handleProviderChange(e.target.value)}
-                >
-                  {Object.entries(providers).map(([key, val]) => (
-                    <option key={key} value={key}>
-                      {val.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="key-field">
-                <label htmlFor="key-input">
-                  {selectedPreset.keyRequired ? 'API Key' : 'API Key (Optional)'}
-                </label>
-                <input
-                  id="key-input"
-                  type="password"
-                  autoComplete="new-password"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  placeholder={selectedPreset.keyRequired ? 'Enter your API key...' : 'Optional'}
-                  value={apiKey}
-                  disabled={busy}
-                  onChange={(e) => {
-                    setApiKey(e.target.value)
-                    setError('')
-                  }}
-                  autoFocus
-                />
-              </div>
-
-              {showBaseUrl && (
-                <div className="key-field">
-                  <label htmlFor="base-url-input">Base URL</label>
-                  <input
-                    id="base-url-input"
-                    type="text"
-                    placeholder="e.g. http://localhost:11434/v1"
-                    value={baseUrl}
-                    disabled={busy}
-                    onChange={(e) => {
-                      setBaseUrl(e.target.value)
-                      setError('')
-                    }}
-                  />
+              {loadingProviders ? (
+                <div className="key-field" style={{ textAlign: 'center', padding: '1.5rem 0' }}>
+                  <p style={{ opacity: 0.8, fontSize: '0.95rem' }}>
+                    Connecting to Analog AI service...
+                  </p>
                 </div>
+              ) : (
+                <>
+                  <div className="key-field">
+                    <label htmlFor="provider-select">Provider</label>
+                    <select
+                      id="provider-select"
+                      value={providerType}
+                      disabled={busy}
+                      onChange={(e) => handleProviderChange(e.target.value)}
+                    >
+                      {Object.entries(providers).map(([key, val]) => (
+                        <option key={key} value={key}>
+                          {val.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="key-field">
+                    <label htmlFor="key-input">
+                      {selectedPreset?.keyRequired ? 'API Key' : 'API Key (Optional)'}
+                    </label>
+                    <input
+                      id="key-input"
+                      type="password"
+                      autoComplete="new-password"
+                      autoCapitalize="off"
+                      spellCheck={false}
+                      placeholder={selectedPreset?.keyRequired ? 'Enter your API key...' : 'Optional'}
+                      value={apiKey}
+                      disabled={busy}
+                      onChange={(e) => {
+                        setApiKey(e.target.value)
+                        setError('')
+                      }}
+                      autoFocus
+                    />
+                  </div>
+
+                  {showBaseUrl && (
+                    <div className="key-field">
+                      <label htmlFor="base-url-input">Base URL</label>
+                      <input
+                        id="base-url-input"
+                        type="text"
+                        placeholder="e.g. http://localhost:11434/v1"
+                        value={baseUrl}
+                        disabled={busy}
+                        onChange={(e) => {
+                          setBaseUrl(e.target.value)
+                          setError('')
+                        }}
+                      />
+                    </div>
+                  )}
+                </>
               )}
 
               {error && (
@@ -294,6 +312,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                 id="step1-next-btn"
                 className="primary"
                 type="button"
+                disabled={busy || loadingProviders}
                 onClick={handleStep1Next}
               >
                 Next
@@ -302,6 +321,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                 id="step1-back-btn"
                 className="back"
                 type="button"
+                disabled={busy}
                 onClick={() => {
                   setError('')
                   setStep(0)
