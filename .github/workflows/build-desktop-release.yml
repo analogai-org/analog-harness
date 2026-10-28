@@ -34,13 +34,13 @@ jobs:
             dsh_platform: darwin
             dsh_arch: arm64
             builder_flag: --mac --arm64
-            artifact_pattern: "analog-harness/apps/desktop/release-builds/*.{dmg,zip}"
+            artifact_pattern: "analog-harness/apps/desktop/release-builds/*.dmg"
           - os: windows-latest
             target: win-x64
             dsh_platform: win32
             dsh_arch: x64
             builder_flag: --win --x64
-            artifact_pattern: "analog-harness/apps/desktop/release-builds/*.{exe,zip,blockmap}"
+            artifact_pattern: "analog-harness/apps/desktop/release-builds/*.exe"
 
     steps:
       - name: Checkout analog-harness Repository
@@ -201,8 +201,8 @@ jobs:
         with:
           name: Analog-${{ matrix.target }}
           path: |
-            analog-harness/apps/desktop/release-builds/Analog*
-            analog-harness/apps/desktop/release-builds/latest*.yml
+            analog-harness/apps/desktop/release-builds/*.dmg
+            analog-harness/apps/desktop/release-builds/*.exe
           if-no-files-found: error
 
   release:
@@ -224,11 +224,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name != '' && github.ref_name || inputs.release_tag }}
-          name: Release ${{ github.ref_name != '' && github.ref_name || inputs.release_tag }}
+          name: Analog Desktop ${{ github.ref_name != '' && github.ref_name || inputs.release_tag }}
+          generate_release_notes: true
           draft: false
           prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || true }}
           files: |
-            artifacts/**/Analog*
-            artifacts/**/latest*.yml
+            artifacts/**/*.dmg
+            artifacts/**/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
