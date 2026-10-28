@@ -200,7 +200,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Analog-${{ matrix.target }}
-          path: analog-harness/apps/desktop/release-builds/
+          path: |
+            analog-harness/apps/desktop/release-builds/Analog*
+            analog-harness/apps/desktop/release-builds/latest*.yml
           if-no-files-found: error
 
   release:
@@ -226,9 +228,7 @@ jobs:
           draft: false
           prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || true }}
           files: |
-            artifacts/**/*.dmg
-            artifacts/**/*.exe
-            artifacts/**/*.zip
-            artifacts/**/*.blockmap
+            artifacts/**/Analog*
+            artifacts/**/latest*.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
