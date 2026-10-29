@@ -76,49 +76,66 @@ export async function ensurePrebuiltChatBackend() {
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  try {
-    const res = await fetch(downloadUrl, { headers, redirect: 'follow' })
-    if (!res.ok) {
-      // If direct tag url fails, try releases API lookup
-      console.warn(`[fetch-backend] Direct asset download returned ${res.status}. Querying GitHub Releases API...`)
-      const apiHeaders = {
-        'User-Agent': 'analog-harness-build',
-        'Accept': 'application/vnd.github+json',
-      }
-      if (token) {
-        apiHeaders['Authorization'] = `Bearer ${token}`
-      }
-      const relApiUrl = tag === 'latest'
-        ? 'https://api.github.com/repos/analogai-org/chat/releases/latest'
-        : `https://api.github.com/repos/analogai-org/chat/releases/tags/${tag}`
-      
-      const relRes = await fetch(relApiUrl, { headers: apiHeaders })
-      if (!relRes.ok) {
-        throw new Error(`Failed to query release info from GitHub API: ${relRes.status} ${relRes.statusText}`)
-      }
-      const relData = await relRes.json()
-      const asset = relData.assets?.find(a => a.name === assetName)
-      if (!asset) {
-        throw new Error(`Asset '${assetName}' not found in release '${relData.tag_name || tag}'. Available assets: ${relData.assets?.map(a => a.name).join(', ')}`)
-      }
+  let downloaded = false
+  const maxRetries = 5
+  const retryDelayMs = 5000
 
-      console.log(`[fetch-backend] Found asset URL: ${asset.url}`)
-      const assetRes = await fetch(asset.url, {
-        headers: {
-          ...apiHeaders,
-          'Accept': 'application/octet-stream',
-        },
-        redirect: 'follow',
-      })
-      if (!assetRes.ok) {
-        throw new Error(`Failed to download release asset: ${assetRes.status} ${assetRes.statusText}`)
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[fetch-backend] Fetch attempt ${attempt}/${maxRetries}...`)
+      const res = await fetch(downloadUrl, { headers, redirect: 'follow' })
+      if (!res.ok) {
+        console.warn(`[fetch-backend] Direct asset download returned ${res.status}. Querying GitHub Releases API...`)
+        const apiHeaders = {
+          'User-Agent': 'analog-harness-build',
+          'Accept': 'application/vnd.github+json',
+        }
+        if (token) {
+          apiHeaders['Authorization'] = `Bearer ${token}`
+        }
+        const relApiUrl = tag === 'latest'
+          ? 'https://api.github.com/repos/analogai-org/chat/releases/latest'
+          : `https://api.github.com/repos/analogai-org/chat/releases/tags/${tag}`
+        
+        const relRes = await fetch(relApiUrl, { headers: apiHeaders })
+        if (!relRes.ok) {
+          throw new Error(`Failed to query release info from GitHub API: ${relRes.status} ${relRes.statusText}`)
+        }
+        const relData = await relRes.json()
+        const asset = relData.assets?.find(a => a.name === assetName)
+        if (!asset) {
+          throw new Error(`Asset '${assetName}' not found in release '${relData.tag_name || tag}'. Available assets: ${relData.assets?.map(a => a.name).join(', ')}`)
+        }
+
+        console.log(`[fetch-backend] Found asset URL: ${asset.url}`)
+        const assetRes = await fetch(asset.url, {
+          headers: {
+            ...apiHeaders,
+            'Accept': 'application/octet-stream',
+          },
+          redirect: 'follow',
+        })
+        if (!assetRes.ok) {
+          throw new Error(`Failed to download release asset: ${assetRes.status} ${assetRes.statusText}`)
+        }
+        const fileStream = createWriteStream(archivePath)
+        await pipeline(Readable.fromWeb(assetRes.body), fileStream)
+      } else {
+        const fileStream = createWriteStream(archivePath)
+        await pipeline(Readable.fromWeb(res.body), fileStream)
       }
-      const fileStream = createWriteStream(archivePath)
-      await pipeline(Readable.fromWeb(assetRes.body), fileStream)
-    } else {
-      const fileStream = createWriteStream(archivePath)
-      await pipeline(Readable.fromWeb(res.body), fileStream)
+      downloaded = true
+      break
+    } catch (err) {
+      console.warn(`[fetch-backend] Attempt ${attempt} failed: ${err.message}`)
+      if (attempt < maxRetries) {
+        console.log(`[fetch-backend] Waiting ${retryDelayMs / 1000}s before retrying...`)
+        await new Promise(r => setTimeout(r, retryDelayMs))
+      } else {
+        throw err
+      }
     }
+  }
 
     console.log(`[fetch-backend] Downloaded ${archivePath}. Extracting into ${prebuiltDir}...`)
 
