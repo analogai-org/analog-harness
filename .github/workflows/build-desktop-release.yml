@@ -78,6 +78,29 @@ jobs:
         run: |
           pnpm run build:official
 
+      - name: Wait for Chat Backend Compilation
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.ANALOG_CI_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Checking for active 'chat' microservice compilation workflows on analogai-org/chat..."
+          ACTIVE_RUNS=$(gh run list --repo analogai-org/chat --workflow build-backend.yml --status in_progress --json databaseId -q '.[].databaseId' 2>/dev/null || true)
+          QUEUED_RUNS=$(gh run list --repo analogai-org/chat --workflow build-backend.yml --status queued --json databaseId -q '.[].databaseId' 2>/dev/null || true)
+          WAITING_RUNS=$(gh run list --repo analogai-org/chat --workflow build-backend.yml --status waiting --json databaseId -q '.[].databaseId' 2>/dev/null || true)
+
+          ALL_RUNS=$(echo "$ACTIVE_RUNS $QUEUED_RUNS $WAITING_RUNS" | xargs)
+          if [ -n "$ALL_RUNS" ]; then
+            for RUN_ID in $ALL_RUNS; do
+              if [ -n "$RUN_ID" ]; then
+                echo "Found active chat build (Run ID: $RUN_ID). Pausing desktop build until chat compilation finishes..."
+                gh run watch "$RUN_ID" --repo analogai-org/chat --exit-status || true
+              fi
+            done
+            echo "All active chat builds completed! Proceeding to fetch new binaries."
+          else
+            echo "No active chat builds detected. Proceeding to fetch backend."
+          fi
+
       - name: Fetch Prebuilt Chat Backend & Prepare Embedded Runtime
         working-directory: analog-harness/apps/desktop
         env:
