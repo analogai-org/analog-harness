@@ -48,86 +48,6 @@ jobs:
         with:
           path: analog-harness
 
-      - name: Checkout Chat Repository
-        uses: actions/checkout@v4
-        with:
-          repository: analogai-org/chat
-          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-          path: chat
-
-      - name: Checkout deepthink Repository
-        uses: actions/checkout@v4
-        with:
-          repository: analogai-org/deepthink
-          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-          path: deepthink
-        continue-on-error: true
-
-      - name: Checkout deepact Repository
-        uses: actions/checkout@v4
-        with:
-          repository: analogai-org/deepact
-          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-          path: deepact
-        continue-on-error: true
-
-      - name: Checkout foundation Repository
-        uses: actions/checkout@v4
-        with:
-          repository: analogai-org/foundation
-          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-          path: foundation
-        continue-on-error: true
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Set up sccache compiler cache
-        uses: mozilla/sccache-action@v0.0.8
-
-      - name: Cache Python / Poetry / Pip
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/pypoetry
-            ~/.cache/pip
-            ~/Library/Caches/pypoetry
-            ~/Library/Caches/pip
-            ~\AppData\Local\pypoetry\Cache
-            ~\AppData\Local\pip\Cache
-          key: ${{ runner.os }}-python-poetry-${{ hashFiles('chat/poetry.lock', 'chat/pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-python-poetry-
-
-      - name: Cache PyInstaller Analysis Cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/pyinstaller
-            ~/Library/Caches/pyinstaller
-            ~\AppData\Local\pyinstaller
-          key: ${{ runner.os }}-pyinstaller-${{ hashFiles('chat/poetry.lock', 'chat/build_cython_binary.py') }}
-          restore-keys: |
-            ${{ runner.os }}-pyinstaller-
-
-      - name: Install Python Dependencies & Cython / PyInstaller via Poetry
-        working-directory: chat
-        run: |
-          python -m pip install --upgrade pip setuptools wheel Cython pyinstaller poetry
-          python -m poetry config virtualenvs.create false
-          python -m poetry install --no-root --no-interaction
-
-      - name: Compile Chat Microservice to Machine Code (.pyd / .so) and Bundle
-        working-directory: chat
-        env:
-          SCCACHE_GHA_ENABLED: "true"
-        run: |
-          sccache --show-stats || true
-          python build_cython_binary.py
-          sccache --show-stats || true
-
       - name: Set up pnpm
         uses: pnpm/action-setup@v3
         with:
@@ -158,11 +78,12 @@ jobs:
         run: |
           pnpm run build:official
 
-      - name: Prepare Analog Embedded Runtime & Packages
+      - name: Fetch Prebuilt Chat Backend & Prepare Embedded Runtime
         working-directory: analog-harness/apps/desktop
         env:
           DSH_DESKTOP_TARGET_PLATFORM: ${{ matrix.dsh_platform }}
           DSH_DESKTOP_TARGET_ARCH: ${{ matrix.dsh_arch }}
+          GH_PAT: ${{ secrets.GH_PAT || secrets.ANALOG_CI_PAT || secrets.GITHUB_TOKEN }}
         run: |
           pnpm run prepare:analog
 

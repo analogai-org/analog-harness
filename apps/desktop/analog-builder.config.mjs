@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { desktopTargetBuildPaths, resolveDesktopBuildTarget } from './scripts/desktop-build-paths.mjs'
 
 const root = fileURLToPath(new URL('.', import.meta.url))
+const prebuiltChatPath = join(root, 'prebuilt/analog-chat-service')
 const chatServiceDistPath = fileURLToPath(new URL('../../../chat/dist/analog-chat-service', import.meta.url))
 const chatServiceWinDistPath = fileURLToPath(new URL('../../../chat/dist/analog-chat-service-win/analog-chat-service', import.meta.url))
 const chatMainDistPath = fileURLToPath(new URL('../../../chat/dist/main.dist', import.meta.url))
@@ -22,9 +23,11 @@ if (!existsSync(runtimeTargetRoot)) {
   throw new Error(`[analog-builder] CRITICAL ERROR: runtime directory not found at ${runtimeTargetRoot}. You must run 'pnpm run prepare:analog' before packaging.`)
 }
 
-const resolvedChatPath = existsSync(chatServiceWinDistPath)
-  ? chatServiceWinDistPath
-  : (existsSync(chatServiceDistPath) ? chatServiceDistPath : (existsSync(chatMainDistPath) ? chatMainDistPath : undefined))
+const resolvedChatPath = existsSync(prebuiltChatPath)
+  ? prebuiltChatPath
+  : (existsSync(chatServiceWinDistPath)
+    ? chatServiceWinDistPath
+    : (existsSync(chatServiceDistPath) ? chatServiceDistPath : (existsSync(chatMainDistPath) ? chatMainDistPath : undefined)))
 
 /** @type {import('electron-builder').Configuration} */
 const config = {

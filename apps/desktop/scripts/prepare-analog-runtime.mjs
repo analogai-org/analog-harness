@@ -3,12 +3,16 @@ import { mkdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { desktopTargetBuildPaths, resolveDesktopBuildTarget } from './desktop-build-paths.mjs'
+import { ensurePrebuiltChatBackend } from './fetch-prebuilt-backend.mjs'
 
 const desktopRoot = fileURLToPath(new URL('..', import.meta.url))
 const repoRoot = resolve(desktopRoot, '../..')
 
 const targetName = resolveDesktopBuildTarget()
 console.log(`[prepare-analog] Preparing runtime for target: ${targetName}`)
+
+// Ensure prebuilt chat microservice is available
+await ensurePrebuiltChatBackend()
 
 const buildPaths = desktopTargetBuildPaths(targetName)
 
