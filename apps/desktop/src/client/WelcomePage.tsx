@@ -19,6 +19,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
   const [step, setStep] = useState<0 | 1 | 2>(0)
   const [providers, setProviders] = useState<Record<string, ProviderPreset>>({})
   const [loadingProviders, setLoadingProviders] = useState(true)
+  const [serviceError, setServiceError] = useState('')
 
   const [providerType, setProviderType] = useState('')
   const [apiKey, setApiKey] = useState('')
@@ -30,65 +31,79 @@ export function Welcome({ api }: { api: WelcomeApi }) {
   const [statusMessage, setStatusMessage] = useState('')
   const [error, setError] = useState('')
   const mounted = useRef(true)
+  const retryCount = useRef(0)
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  const fetchProviders = async () => {
+    try {
+      let res = await fetch('http://localhost:8071/available-providers', {
+        signal: AbortSignal.timeout(3000),
+      }).catch(() => null)
+      if (!res || !res.ok) {
+        res = await fetch('http://localhost:8071/v1/available-providers', {
+          signal: AbortSignal.timeout(3000),
+        }).catch(() => null)
+      }
+      if (res && res.ok) {
+        const data = await res.json()
+        if (data && Array.isArray(data.providers) && data.providers.length > 0) {
+          const map: Record<string, ProviderPreset> = {}
+          for (const p of data.providers) {
+            map[p.id] = {
+              name: p.name,
+              baseUrl: p.baseUrl || p.base_url || '',
+              teacherModel: p.teacherModel || p.teacher_model || '',
+              studentModel: p.studentModel || p.student_model || '',
+              keyRequired: p.keyRequired ?? p.key_required ?? true,
+            }
+          }
+          if (mounted.current) {
+            setProviders(map)
+            setLoadingProviders(false)
+            setServiceError('')
+            setProviderType((prev) => {
+              const nextType = map[prev] ? prev : data.providers[0].id
+              const active = map[nextType]
+              if (active) {
+                setBaseUrl((b) => b || active.baseUrl)
+                setTeacherModel((t) => t || active.teacherModel)
+                setStudentModel((s) => s || active.studentModel)
+              }
+              return nextType
+            })
+            return // Successfully retrieved providers, stop polling
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch available providers from microservice:', err)
+    }
+
+    // Retry if microservice is still starting up
+    if (mounted.current) {
+      retryCount.current += 1
+      if (retryCount.current > 10) {
+        setLoadingProviders(false)
+        setServiceError(
+          'Chat microservice is unavailable or unreachable on port 8071. Please ensure the backend is started.',
+        )
+      } else {
+        pollTimerRef.current = setTimeout(() => {
+          void fetchProviders()
+        }, 1500)
+      }
+    }
+  }
 
   useEffect(() => {
     mounted.current = true
     document.title = 'Analog AI Harness Setup'
 
-    let pollTimer: ReturnType<typeof setTimeout> | undefined
-
-    // Continuously poll available providers from chat microservice until ready
-    async function fetchProviders() {
-      try {
-        let res = await fetch('http://localhost:8071/available-providers').catch(() => null)
-        if (!res || !res.ok) {
-          res = await fetch('http://localhost:8071/v1/available-providers').catch(() => null)
-        }
-        if (res && res.ok) {
-          const data = await res.json()
-          if (data && Array.isArray(data.providers) && data.providers.length > 0) {
-            const map: Record<string, ProviderPreset> = {}
-            for (const p of data.providers) {
-              map[p.id] = {
-                name: p.name,
-                baseUrl: p.baseUrl || p.base_url || '',
-                teacherModel: p.teacherModel || p.teacher_model || '',
-                studentModel: p.studentModel || p.student_model || '',
-                keyRequired: p.keyRequired ?? p.key_required ?? true,
-              }
-            }
-            if (mounted.current) {
-              setProviders(map)
-              setLoadingProviders(false)
-              setProviderType((prev) => {
-                const nextType = map[prev] ? prev : data.providers[0].id
-                const active = map[nextType]
-                if (active) {
-                  setBaseUrl((b) => b || active.baseUrl)
-                  setTeacherModel((t) => t || active.teacherModel)
-                  setStudentModel((s) => s || active.studentModel)
-                }
-                return nextType
-              })
-              return // Successfully retrieved providers, stop polling
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('Could not fetch available providers from microservice:', err)
-      }
-
-      // Retry if microservice is still starting up
-      if (mounted.current) {
-        pollTimer = setTimeout(fetchProviders, 1500)
-      }
-    }
-
     void fetchProviders()
 
     return () => {
       mounted.current = false
-      if (pollTimer) clearTimeout(pollTimer)
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
     }
   }, [])
 
@@ -104,6 +119,11 @@ export function Welcome({ api }: { api: WelcomeApi }) {
   }
 
   function handleStep1Next() {
+    if (Object.keys(providers).length === 0) {
+      setError('Chat microservice is unavailable. Please ensure the service is running.')
+      return
+    }
+
     const preset = providers[providerType]
     const keyRequired = preset ? preset.keyRequired : true
 
@@ -238,9 +258,31 @@ export function Welcome({ api }: { api: WelcomeApi }) {
 
               {loadingProviders ? (
                 <div className="key-field" style={{ textAlign: 'center', padding: '1.5rem 0' }}>
-                  <p style={{ opacity: 0.8, fontSize: '0.95rem' }}>
-                    Connecting to Analog AI service...
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                    <StateDot state="ongoing" size={14} />
+                    <p style={{ opacity: 0.8, fontSize: '0.95rem', margin: 0 }}>
+                      Connecting to Analog AI service...
+                    </p>
+                  </div>
+                </div>
+              ) : serviceError || Object.keys(providers).length === 0 ? (
+                <div className="key-field" style={{ textAlign: 'center', padding: '1.5rem 0' }}>
+                  <p className="key-error" role="alert" style={{ marginBottom: '1rem' }}>
+                    {serviceError || 'Chat microservice is unavailable. Unable to load providers.'}
                   </p>
+                  <button
+                    className="secondary"
+                    type="button"
+                    onClick={() => {
+                      setLoadingProviders(true)
+                      setServiceError('')
+                      setError('')
+                      retryCount.current = 0
+                      void fetchProviders()
+                    }}
+                  >
+                    Retry Connection
+                  </button>
                 </div>
               ) : (
                 <>
@@ -312,7 +354,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                 id="step1-next-btn"
                 className="primary"
                 type="button"
-                disabled={busy || loadingProviders}
+                disabled={busy || loadingProviders || Object.keys(providers).length === 0}
                 onClick={handleStep1Next}
               >
                 Next
