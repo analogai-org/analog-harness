@@ -329,7 +329,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                       <input
                         id="base-url-input"
                         type="text"
-                        placeholder="e.g. http://localhost:11434/v1"
+                        placeholder="e.g. http://localhost:11434"
                         value={baseUrl}
                         disabled={busy}
                         onChange={(e) => {
