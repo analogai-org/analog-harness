@@ -87,6 +87,31 @@ jobs:
       - name: Set up sccache compiler cache
         uses: mozilla/sccache-action@v0.0.8
 
+      - name: Cache Python / Poetry / Pip
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pypoetry
+            ~/.cache/pip
+            ~/Library/Caches/pypoetry
+            ~/Library/Caches/pip
+            ~\AppData\Local\pypoetry\Cache
+            ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-python-poetry-${{ hashFiles('chat/poetry.lock', 'chat/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-python-poetry-
+
+      - name: Cache PyInstaller Analysis Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pyinstaller
+            ~/Library/Caches/pyinstaller
+            ~\AppData\Local\pyinstaller
+          key: ${{ runner.os }}-pyinstaller-${{ hashFiles('chat/poetry.lock', 'chat/build_cython_binary.py') }}
+          restore-keys: |
+            ${{ runner.os }}-pyinstaller-
+
       - name: Install Python Dependencies & Cython / PyInstaller via Poetry
         working-directory: chat
         run: |
@@ -140,6 +165,20 @@ jobs:
           DSH_DESKTOP_TARGET_ARCH: ${{ matrix.dsh_arch }}
         run: |
           pnpm run prepare:analog
+
+      - name: Cache Electron and electron-builder Binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: ${{ runner.os }}-electron-${{ hashFiles('analog-harness/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
 
       - name: Package Desktop Installer (DMG / EXE)
         working-directory: analog-harness/apps/desktop
