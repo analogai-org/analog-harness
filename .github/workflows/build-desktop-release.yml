@@ -42,12 +42,7 @@ jobs:
             dsh_arch: arm64
             builder_flag: --mac --arm64
             artifact_pattern: "analog-harness/apps/desktop/release-builds/*.dmg"
-          - os: windows-latest
-            target: win-x64
-            dsh_platform: win32
-            dsh_arch: x64
-            builder_flag: --win --x64
-            artifact_pattern: "analog-harness/apps/desktop/release-builds/*.exe"
+
 
     steps:
       - name: Checkout analog-harness Repository
