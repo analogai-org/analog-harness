@@ -8,6 +8,13 @@ on:
       - 'v*'
   workflow_dispatch:
     inputs:
+      runner_strategy:
+        description: 'Runner Strategy (github-cloud or self-hosted)'
+        type: choice
+        options:
+          - github-cloud
+          - self-hosted
+        default: github-cloud
       release_tag:
         description: 'Release tag (e.g. v1.0.0)'
         required: false
@@ -16,7 +23,7 @@ on:
         description: 'Publish as Pre-release (for testing before public launch)'
         type: boolean
         required: false
-        default: true
+        default: false
 
 permissions:
   contents: write
@@ -27,8 +34,8 @@ concurrency:
 
 jobs:
   build:
-    name: Build (${{ matrix.target }} - ${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ inputs.runner_strategy == 'self-hosted' && matrix.self_hosted_runner || matrix.cloud_runner }}
     defaults:
       run:
         shell: bash
@@ -36,13 +43,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: [self-hosted, macos-arm64]
+          - cloud_runner: macos-14
+            self_hosted_runner: [self-hosted, macos-arm64]
             target: mac-arm64
             dsh_platform: darwin
             dsh_arch: arm64
             builder_flag: --mac --arm64
             artifact_pattern: "analog-harness/apps/desktop/release-builds/*.dmg"
-
+          - cloud_runner: windows-latest
+            self_hosted_runner: [self-hosted, win-x64]
+            target: win-x64
+            dsh_platform: win32
+            dsh_arch: x64
+            builder_flag: --win --x64
+            artifact_pattern: "analog-harness/apps/desktop/release-builds/*.exe"
 
     steps:
       - name: Checkout analog-harness Repository
@@ -51,13 +65,13 @@ jobs:
           path: analog-harness
 
       - name: Set up pnpm
-        if: "!contains(toJSON(matrix.os), 'self-hosted')"
+        if: "inputs.runner_strategy != 'self-hosted'"
         uses: pnpm/action-setup@v3
         with:
           version: 11.7.0
 
       - name: Set up Node.js 22
-        if: "!contains(toJSON(matrix.os), 'self-hosted')"
+        if: "inputs.runner_strategy != 'self-hosted'"
         uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -203,7 +217,7 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: build
-    runs-on: [self-hosted, macos-arm64]
+    runs-on: ${{ inputs.runner_strategy == 'self-hosted' && 'self-hosted' || 'ubuntu-latest' }}
     if: "!cancelled() && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')"
     steps:
       - name: Checkout analog-harness Repository

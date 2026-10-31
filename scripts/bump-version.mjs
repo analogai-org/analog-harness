@@ -1,18 +1,11 @@
 #!/usr/bin/env node
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, globSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const rootDir = resolve(__dirname, '..')
-
-const targetFiles = [
-  join(rootDir, 'package.json'),
-  join(rootDir, 'apps/desktop/package.json'),
-  join(rootDir, 'apps/cli/package.json'),
-  join(rootDir, 'apps/desktop-host/package.json')
-]
 
 const arg = process.argv[2]
 if (!arg) {
@@ -50,6 +43,12 @@ const newVersion = bump(currentVersion, arg)
 
 console.log(`\n🚀 Bumping analog-harness version: ${currentVersion} -> ${newVersion}\n`)
 
+const targetFiles = [
+  join(rootDir, 'package.json'),
+  ...globSync(['apps/*/package.json', 'packages/*/*/package.json'], { cwd: rootDir }).map(p => join(rootDir, p))
+]
+
+let count = 0
 for (const filePath of targetFiles) {
   if (existsSync(filePath)) {
     try {
@@ -57,16 +56,16 @@ for (const filePath of targetFiles) {
       const old = content.version
       content.version = newVersion
       writeFileSync(filePath, JSON.stringify(content, null, 2) + '\n', 'utf8')
-      console.log(`  Updated ${filePath.replace(rootDir + '/', '')}: ${old} -> ${newVersion}`)
+      count++
     } catch (err) {
       console.warn(`  Warning: could not update ${filePath}: ${err.message}`)
     }
   }
 }
 
-console.log(`\n✅ Successfully updated package versions to ${newVersion}`)
+console.log(`\n✅ Successfully updated ${count} package versions to ${newVersion}`)
 console.log(`\nNext steps:`)
-console.log(`  git add package.json apps/desktop/package.json`)
+console.log(`  git add -u`)
 console.log(`  git commit -m "chore(release): v${newVersion}"`)
 console.log(`  git tag v${newVersion}`)
 console.log(`  git push origin main --tags\n`)
