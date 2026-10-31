@@ -36,7 +36,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          - os: [self-hosted, macos-arm64]
             target: mac-arm64
             dsh_platform: darwin
             dsh_arch: arm64
@@ -202,7 +202,7 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macos-arm64]
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout analog-harness Repository
