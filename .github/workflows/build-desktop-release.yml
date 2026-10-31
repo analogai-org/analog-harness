@@ -56,11 +56,13 @@ jobs:
           path: analog-harness
 
       - name: Set up pnpm
+        if: "!contains(toJSON(matrix.os), 'self-hosted')"
         uses: pnpm/action-setup@v3
         with:
           version: 11.7.0
 
       - name: Set up Node.js 22
+        if: "!contains(toJSON(matrix.os), 'self-hosted')"
         uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -203,7 +205,7 @@ jobs:
     name: Publish GitHub Release
     needs: build
     runs-on: [self-hosted, macos-arm64]
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    if: "!cancelled() && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')"
     steps:
       - name: Checkout analog-harness Repository
         uses: actions/checkout@v4
