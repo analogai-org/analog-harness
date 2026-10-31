@@ -95,6 +95,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_PAT || secrets.ANALOG_CI_PAT || secrets.GITHUB_TOKEN }}
         run: |
+          if ! command -v gh >/dev/null 2>&1; then
+            echo "gh CLI not found on runner, skipping active build watch and proceeding..."
+            exit 0
+          fi
           echo "Checking for active 'chat' microservice compilation workflows on analogai-org/chat..."
           ACTIVE_RUNS=$(gh run list --repo analogai-org/chat --workflow build-backend.yml --status in_progress --json databaseId -q '.[].databaseId' 2>/dev/null || true)
           QUEUED_RUNS=$(gh run list --repo analogai-org/chat --workflow build-backend.yml --status queued --json databaseId -q '.[].databaseId' 2>/dev/null || true)
