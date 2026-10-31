@@ -214,6 +214,108 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     const value = schema.getPath(source, [key])
     return typeof value === 'string' && value.trim().length > 0 ? value : undefined
   }
+
+  const isOAuthProvider = props.provider === 'openai' || props.provider === 'anthropic'
+    || props.provider.toLowerCase().includes('openai') || props.provider.toLowerCase().includes('anthropic')
+  const oauthProviderKey = (props.provider.toLowerCase().includes('openai') ? 'openai' : 'anthropic') as 'openai' | 'anthropic'
+
+  const [toolStatus, setToolStatus] = useState<{
+    provider?: string
+    tool_id?: string
+    installed?: boolean
+    version?: string | null
+    path?: string | null
+    message?: string
+  } | null>(null)
+  const [toolInstalling, setToolInstalling] = useState(false)
+  const [toolError, setToolError] = useState<string | null>(null)
+  const [oauthStatus, setOauthStatus] = useState<{
+    status?: string
+    message?: string
+  } | null>(null)
+
+  useEffect(() => {
+    if (!isOAuthProvider) return
+    let active = true
+
+    const checkStatus = async () => {
+      try {
+        const res = await fetch(`http://localhost:8071/auth/${oauthProviderKey}/tools/status`)
+        if (res.ok && active) {
+          const data = await res.json()
+          setToolStatus(data)
+        }
+      } catch {
+        // Backend not reachable
+      }
+    }
+
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.data?.type === 'oauth_complete' && event.data?.provider === oauthProviderKey) {
+        const apiKey = event.data.api_key
+        if (apiKey) {
+          setKeyDraft(apiKey)
+          try {
+            await operations.storeCredential(keyRef, apiKey)
+            setKeyState({ configured: true, writable: true })
+            props.onSubmitCredential?.()
+          } catch {
+            // ignore if store failed
+          }
+        }
+        setOauthStatus({
+          status: 'success',
+          message: `Signed in successfully via ${oauthProviderKey === 'openai' ? 'OpenAI' : 'Anthropic'} OAuth!`,
+        })
+        void checkStatus()
+      }
+    }
+
+    window.addEventListener('message', handleMessage)
+    void checkStatus()
+
+    return () => {
+      active = false
+      window.removeEventListener('message', handleMessage)
+    }
+  }, [isOAuthProvider, oauthProviderKey, keyRef, operations, props])
+
+  const handleOAuthLogin = async () => {
+    setFailure(undefined)
+    setToolError(null)
+
+    // Check if companion CLI tool is installed. If not, auto-install it first!
+    if (!toolStatus?.installed) {
+      setToolInstalling(true)
+      try {
+        const installRes = await fetch(`http://localhost:8071/auth/${oauthProviderKey}/tools/install`, {
+          method: 'POST',
+        })
+        const installData = await installRes.json()
+        if (installRes.ok && installData.success) {
+          setToolStatus(installData)
+        } else {
+          setToolError(installData.detail || installData.message || 'CLI companion auto-install skipped, proceeding to login…')
+        }
+      } catch {
+        setToolError('CLI companion auto-install skipped, proceeding to login…')
+      } finally {
+        setToolInstalling(false)
+      }
+    }
+
+    // Now open OAuth popup
+    const width = 600
+    const height = 750
+    const left = window.screenX + (window.outerWidth - width) / 2
+    const top = window.screenY + (window.outerHeight - height) / 2
+    window.open(
+      `http://localhost:8071/auth/${oauthProviderKey}/login`,
+      `oauth_${oauthProviderKey}`,
+      `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`,
+    )
+  }
+
   const setField = (key: string, next: string | undefined): void => {
     // A value of nothing but whitespace is cleared, not stored: `stringAt`
     // already reports it as absent, so the field would otherwise render empty
@@ -378,8 +480,76 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       defaultMaxTokens={typeof defaultMaxTokens === 'number' ? defaultMaxTokens : undefined} />
     return (
       <>
+        {isOAuthProvider ? (
+          <div className={styles['oauthCard']} style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className={styles['oauthTitle']}>
+                    {oauthProviderKey === 'openai' ? 'OpenAI' : 'Anthropic'}
+                  </span>
+                  {keyState?.configured || oauthStatus?.status === 'success' ? (
+                    <span style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      background: 'rgba(34, 197, 94, 0.15)',
+                      color: '#16a34a',
+                      padding: '2px 8px',
+                      borderRadius: 12,
+                    }}>
+                      ✓ Connected
+                    </span>
+                  ) : null}
+                </div>
+                <p className={styles['oauthText']} style={{ margin: '4px 0 0' }}>
+                  {oauthProviderKey === 'openai'
+                    ? 'Log in with your OpenAI account to use GPT models and agents.'
+                    : 'Log in with your Anthropic account to use Claude models and agents.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                className={styles['editButton']}
+                style={{
+                  background: 'var(--dsw-alias-brand-primary)',
+                  color: '#ffffff',
+                  borderColor: 'var(--dsw-alias-brand-primary)',
+                  height: 34,
+                  padding: '0 16px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+                disabled={disabled || toolInstalling}
+                onClick={() => { void handleOAuthLogin() }}
+              >
+                {toolInstalling
+                  ? 'Connecting…'
+                  : keyState?.configured || oauthStatus?.status === 'success'
+                    ? 'Re-authenticate'
+                    : (oauthProviderKey === 'openai' ? 'Log in with OpenAI' : 'Log in with Anthropic')}
+              </button>
+            </div>
+
+            {oauthStatus?.message ? (
+              <div className={styles['oauthStatus']} style={{ marginTop: 8 }}>
+                <span>✓ {oauthStatus.message}</span>
+              </div>
+            ) : null}
+
+            {toolError ? (
+              <div className={styles['oauthStatus']} style={{ marginTop: 8, color: '#ef4444' }}>
+                <span>{toolError}</span>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <div className={styles['field']}>
-          <span className={styles['fieldLabel']}>{t('keyInput')}</span>
+          <span className={styles['fieldLabel']}>
+            {isOAuthProvider ? `${t('keyInput')} (Optional / Manual override)` : t('keyInput')}
+          </span>
           <input
             className={styles['input']}
             type="password"

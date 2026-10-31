@@ -27,12 +27,84 @@ export function Welcome({ api }: { api: WelcomeApi }) {
   const [teacherModel, setTeacherModel] = useState('')
   const [studentModel, setStudentModel] = useState('')
 
+  const [authStatus, setAuthStatus] = useState<{
+    connected: boolean
+    accountEmail?: string | null
+    tool?: { supported?: boolean; tool_id?: string; tool_name?: string; installed?: boolean; path?: string | null }
+  } | null>(null)
+  const [checkingAuth, setCheckingAuth] = useState(false)
+  const [loggingIn, setLoggingIn] = useState(false)
+
   const [busy, setBusy] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
   const [error, setError] = useState('')
   const mounted = useRef(true)
   const retryCount = useRef(0)
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const authPollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
+
+  const checkProviderAuth = async (pType: string) => {
+    if (pType !== 'openai' && pType !== 'anthropic') {
+      setAuthStatus(null)
+      return
+    }
+    setCheckingAuth(true)
+    try {
+      const res = await fetch(`http://localhost:8071/v1/auth/${pType}/status`, {
+        signal: AbortSignal.timeout(3000),
+      }).catch(() => null)
+      if (res && res.ok) {
+        const data = await res.json()
+        if (mounted.current) {
+          setAuthStatus({
+            connected: Boolean(data.connected),
+            accountEmail: data.account_email,
+            tool: data.tool,
+          })
+          if (data.connected && !apiKey) {
+            setApiKey(`oauth:${pType}:default`)
+          }
+        }
+      }
+    } catch {
+      // Ignore background auth check failures
+    } finally {
+      if (mounted.current) {
+        setCheckingAuth(false)
+      }
+    }
+  }
+
+  const handleOAuthLogin = async () => {
+    if (providerType !== 'openai' && providerType !== 'anthropic') return
+    setLoggingIn(true)
+    setError('')
+
+    try {
+      // First ensure companion CLI tool is checked/installed via chat microservice
+      await fetch(`http://localhost:8071/v1/auth/${providerType}/tools/login?agent_id=default`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(5000),
+      }).catch(() => null)
+
+      const loginUrl = `http://localhost:8071/v1/auth/${providerType}/login?agent_id=default`
+      const popup = window.open(loginUrl, `${providerType}_oauth`, 'width=620,height=750,menubar=no,toolbar=no')
+
+      if (authPollRef.current) clearInterval(authPollRef.current)
+      let elapsed = 0
+      authPollRef.current = setInterval(() => {
+        elapsed += 1500
+        void checkProviderAuth(providerType)
+        if (elapsed > 120000 || popup?.closed) {
+          if (authPollRef.current) clearInterval(authPollRef.current)
+          if (mounted.current) setLoggingIn(false)
+        }
+      }, 1500)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to launch OAuth login')
+      setLoggingIn(false)
+    }
+  }
 
   const fetchProviders = async () => {
     try {
@@ -69,6 +141,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                 setTeacherModel((t) => t || active.teacherModel)
                 setStudentModel((s) => s || active.studentModel)
               }
+              void checkProviderAuth(nextType)
               return nextType
             })
             return // Successfully retrieved providers, stop polling
@@ -101,11 +174,27 @@ export function Welcome({ api }: { api: WelcomeApi }) {
 
     void fetchProviders()
 
+    const onMessage = (event: MessageEvent) => {
+      if (
+        event.data?.type === 'openai_oauth_success' ||
+        event.data?.type === 'anthropic_oauth_success' ||
+        event.data?.type === 'oauth_success'
+      ) {
+        if (mounted.current && providerType) {
+          void checkProviderAuth(providerType)
+          setLoggingIn(false)
+        }
+      }
+    }
+    window.addEventListener('message', onMessage)
+
     return () => {
       mounted.current = false
+      window.removeEventListener('message', onMessage)
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
+      if (authPollRef.current) clearInterval(authPollRef.current)
     }
-  }, [])
+  }, [providerType])
 
   function handleProviderChange(type: string) {
     setProviderType(type)
@@ -116,6 +205,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
       if (preset.studentModel) setStudentModel(preset.studentModel)
     }
     setError('')
+    void checkProviderAuth(type)
   }
 
   function handleStep1Next() {
@@ -126,9 +216,10 @@ export function Welcome({ api }: { api: WelcomeApi }) {
 
     const preset = providers[providerType]
     const keyRequired = preset ? preset.keyRequired : true
+    const isOAuthConnected = (providerType === 'openai' || providerType === 'anthropic') && Boolean(authStatus?.connected)
 
-    if (keyRequired && !apiKey.trim()) {
-      setError(`Please provide an API key for ${preset?.name ?? providerType}`)
+    if (keyRequired && !apiKey.trim() && !isOAuthConnected) {
+      setError(`Please provide an API key or sign in with ${preset?.name ?? providerType}`)
       return
     }
 
@@ -159,9 +250,12 @@ export function Welcome({ api }: { api: WelcomeApi }) {
     setError('')
     setStatusMessage('Configuring Analog AI distillation proxy...')
 
+    const isOAuthConnected = (providerType === 'openai' || providerType === 'anthropic') && Boolean(authStatus?.connected)
+    const effectiveApiKey = isOAuthConnected && !apiKey.trim() ? `oauth:${providerType}:default` : apiKey.trim()
+
     const params: AnalogSetupParams = {
       providerType,
-      providerApiKey: apiKey.trim(),
+      providerApiKey: effectiveApiKey,
       providerBaseUrl: baseUrl.trim() || undefined,
       reasoningModel: teacherModel.trim(),
       fastModel: studentModel.trim(),
@@ -302,9 +396,93 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                     </select>
                   </div>
 
+                  {(providerType === 'openai' || providerType === 'anthropic') && (
+                    <div
+                      className="key-field"
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.04)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderRadius: '8px',
+                        padding: '12px 14px',
+                        marginBottom: '14px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '8px',
+                          marginBottom: '8px',
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                            {providerType === 'openai' ? 'OpenAI Subscription' : 'Anthropic Subscription'}
+                          </span>
+                          {authStatus?.connected ? (
+                            <span
+                              style={{
+                                fontSize: '0.75rem',
+                                background: '#10b98122',
+                                color: '#10b981',
+                                padding: '2px 8px',
+                                borderRadius: '12px',
+                                border: '1px solid #10b98144',
+                              }}
+                            >
+                              ✓ Connected {authStatus.accountEmail ? `(${authStatus.accountEmail})` : ''}
+                            </span>
+                          ) : checkingAuth ? (
+                            <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>Checking login status...</span>
+                          ) : null}
+                        </div>
+                        <button
+                          type="button"
+                          className="secondary"
+                          style={{
+                            padding: '5px 12px',
+                            fontSize: '0.8rem',
+                            height: 'auto',
+                            cursor: busy || loggingIn ? 'default' : 'pointer',
+                          }}
+                          disabled={busy || loggingIn}
+                          onClick={() => void handleOAuthLogin()}
+                        >
+                          {loggingIn
+                            ? 'Connecting...'
+                            : authStatus?.connected
+                              ? 'Reconnect Account'
+                              : `Login with ${selectedPreset?.name || providerType}`}
+                        </button>
+                      </div>
+
+                      <div style={{ fontSize: '0.78rem', opacity: 0.75, lineHeight: 1.4 }}>
+                        {providerType === 'openai' ? (
+                          <>
+                            Checks for <strong>Codex</strong> CLI (
+                            {authStatus?.tool?.installed ? 'Installed' : 'Managed by Chat Service'}) & authenticates
+                            subscription API access without entering an API key.
+                          </>
+                        ) : (
+                          <>
+                            Checks for <strong>Claude Code</strong> CLI (
+                            {authStatus?.tool?.installed ? 'Installed' : 'Managed by Chat Service'}) & authenticates
+                            subscription API access without entering an API key.
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="key-field">
                     <label htmlFor="key-input">
-                      {selectedPreset?.keyRequired ? 'API Key' : 'API Key (Optional)'}
+                      {selectedPreset?.keyRequired && !authStatus?.connected
+                        ? 'API Key'
+                        : authStatus?.connected
+                          ? 'API Key (Optional — OAuth Subscription Connected)'
+                          : 'API Key (Optional)'}
                     </label>
                     <input
                       id="key-input"
@@ -312,7 +490,13 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                       autoComplete="new-password"
                       autoCapitalize="off"
                       spellCheck={false}
-                      placeholder={selectedPreset?.keyRequired ? 'Enter your API key...' : 'Optional'}
+                      placeholder={
+                        authStatus?.connected
+                          ? 'Using connected subscription token'
+                          : selectedPreset?.keyRequired
+                            ? 'Enter your API key or log in above...'
+                            : 'Optional'
+                      }
                       value={apiKey}
                       disabled={busy}
                       onChange={(e) => {

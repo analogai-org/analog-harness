@@ -296,11 +296,78 @@
 .oauthCard {
   background: var(--dsw-alias-settings-card-fill);
   border: 0.5px solid var(--dsw-alias-settings-card-stroke);
-  border-radius: var(--dsw-radius-m);
-  padding: 12px 14px;
+  border-radius: var(--dsw-radius-xl);
+  padding: 16px;
   display: flex;
   flex-direction: column;
+  gap: 12px;
+}
+
+.oauthGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.oauthHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.oauthBrand {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.oauthStatusBadgeConnected {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(16, 163, 127, 0.12);
+  color: #10a37f;
+  border: 0.5px solid rgba(16, 163, 127, 0.3);
+}
+
+.oauthStatusBadgeConnectedAnthropic {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+  border: 0.5px solid rgba(245, 158, 11, 0.3);
+}
+
+.oauthStatusBadgeDisconnected {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-tertiary);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.oauthStatusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .oauthTitle {
@@ -311,8 +378,54 @@
 
 .oauthText {
   font-size: 12px;
-  line-height: 17px;
+  line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
+}
+
+.oauthFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.oauthEmail {
+  font-size: 11px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.modalOAuthBoxOpenAI {
+  background: rgba(16, 163, 127, 0.08);
+  border: 0.5px solid rgba(16, 163, 127, 0.3);
+  border-radius: var(--dsw-radius-m);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modalOAuthBoxAnthropic {
+  background: rgba(217, 119, 6, 0.08);
+  border: 0.5px solid rgba(217, 119, 6, 0.3);
+  border-radius: var(--dsw-radius-m);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modalOAuthRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .oauthStatus {

@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-root",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.6",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -17,6 +17,7 @@
     "website"
   ],
   "scripts": {
+    "bump:version": "node scripts/bump-version.mjs",
     "prepare:primary-runtime": "tsx scripts/primary-runtime/prepare.ts",
     "build": "tsx scripts/build.ts",
     "build:bench": "npm run build:native-system && npm run build:lib && tsdown --config-loader native --config benchmarks/tsdown.config.ts",
@@ -193,7 +194,6 @@
     "release:dsh": "tsx scripts/release/bump.ts --family dsh",
     "release:vendor": "tsx scripts/release/bump.ts --family vendor",
     "release:verify": "tsx scripts/release/verify.ts",
-    "release:pack": "tsx scripts/release/pack.ts",
     "release:verify-packed-install": "tsx scripts/release/verify-packed-install.ts",
     "release:publish": "tsx scripts/release/publish.ts",
     "dsh": "node --import tsx/esm apps/cli/src/bin.ts",

@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { desktopTargetBuildPaths, resolveDesktopBuildTarget } from './scripts/desktop-build-paths.mjs'
 
 const root = fileURLToPath(new URL('.', import.meta.url))
@@ -13,6 +14,48 @@ const targetName = resolveDesktopBuildTarget(process.env, process.platform, proc
 const buildPaths = desktopTargetBuildPaths(targetName)
 const dshTargetRoot = buildPaths.dsh
 const runtimeTargetRoot = buildPaths.runtime
+
+// Single source of truth for application version
+function resolveAppVersion() {
+  if (process.env.APP_VERSION) {
+    return process.env.APP_VERSION.replace(/^v/, '')
+  }
+  if (process.env.RELEASE_VERSION) {
+    return process.env.RELEASE_VERSION.replace(/^v/, '')
+  }
+  if (process.env.GITHUB_REF_NAME && (process.env.GITHUB_REF_TYPE === 'tag' || process.env.GITHUB_REF_NAME.startsWith('v'))) {
+    return process.env.GITHUB_REF_NAME.replace(/^v/, '')
+  }
+  try {
+    const pkgPath = join(root, 'package.json')
+    if (existsSync(pkgPath)) {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
+      if (pkg.version && pkg.version !== '0.0.0-dev') {
+        return pkg.version.replace(/^v/, '')
+      }
+    }
+  } catch {}
+  try {
+    const rootPkgPath = join(root, '../../package.json')
+    if (existsSync(rootPkgPath)) {
+      const rootPkg = JSON.parse(readFileSync(rootPkgPath, 'utf8'))
+      if (rootPkg.version && rootPkg.version !== '0.0.0-dev') {
+        return rootPkg.version.replace(/^v/, '')
+      }
+    }
+  } catch {}
+  try {
+    const exactTag = execSync('git describe --tags --exact-match', { stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8' }).trim()
+    if (exactTag) return exactTag.replace(/^v/, '')
+  } catch {}
+  try {
+    const latestTag = execSync('git describe --tags --abbrev=0', { stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8' }).trim()
+    if (latestTag) return latestTag.replace(/^v/, '')
+  } catch {}
+  return '0.0.0-dev'
+}
+
+const appVersion = resolveAppVersion()
 
 // Critical integrity checks: abort immediately if dependencies were not prepared
 const runtimeDescriptorPath = join(dshTargetRoot, 'desktop-runtime.json')
@@ -34,6 +77,9 @@ const config = {
   appId: 'ai.analog.desktop',
   productName: 'Analog',
   executableName: 'Analog',
+  extraMetadata: {
+    version: appVersion,
+  },
   artifactName: 'Analog-${version}-${os}-${arch}.${ext}',
   directories: {
     output: join(root, 'release-builds'),

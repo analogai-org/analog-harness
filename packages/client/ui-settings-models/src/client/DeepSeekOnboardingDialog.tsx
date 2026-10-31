@@ -6,7 +6,7 @@
  * the onboarding plugin's shared modal, so the key is entered once.
  */
 import type { TrackProductEvent } from '@deepseek-ai/dsh-client-product-analytics/client'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { InjectFace, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -50,8 +50,8 @@ function assertNever(_value: never): never {
 }
 
 /**
- * Prompt a first-run user for the official DeepSeek credential while no
- * provider can serve requests and that credential is writable.
+ * Prompt a first-run user for a provider credential (OpenAI, Anthropic, or DeepSeek)
+ * while no provider can serve requests and that credential is writable.
  * @param props - settings-shell owner state and Models feature dependencies.
  * @returns the onboarding modal or null when onboarding needs no intervention.
  */
@@ -59,6 +59,7 @@ export function DeepSeekOnboardingDialog(props: DeepSeekOnboardingDialogProps): 
   const { complete, controller, useModels, operations, schema, t, automatic, explicit = false } = props
   const state = useModels(snapshot => snapshot)
   const readiness = onboardingReadiness(state)
+  const [selectedProvider, setSelectedProvider] = useState<string>('openai')
 
   useEffect(() => {
     if ((automatic || explicit) && state.status === 'idle') void controller.load()
@@ -90,12 +91,13 @@ export function DeepSeekOnboardingDialog(props: DeepSeekOnboardingDialogProps): 
       return assertNever(readiness)
   }
 
-  const row = state.rows.find(candidate =>
-    candidate.entry.provider === 'deepseek-official'
-    && candidate.entry.settingsNs === 'llm-deepseek'
-    && candidate.entry.settingsPath.length === 0)
-  const namespace = state.namespaces.get('llm-deepseek')
-  /* v8 ignore next 2 -- credential-missing is derived only from this exact joined row. */
+  const row = state.rows.find(candidate => candidate.entry.provider === selectedProvider)
+    ?? state.rows.find(candidate => candidate.entry.provider === 'openai')
+    ?? state.rows.find(candidate => candidate.entry.provider === 'anthropic')
+    ?? state.rows.find(candidate => candidate.entry.provider === 'deepseek-official')
+    ?? state.rows[0]
+
+  const namespace = row ? state.namespaces.get(row.entry.settingsNs) : undefined
   if (row === undefined || namespace === undefined) return null
 
   const finishCredential = (changed: boolean): void => {
@@ -108,9 +110,82 @@ export function DeepSeekOnboardingDialog(props: DeepSeekOnboardingDialogProps): 
 
   const editor = (
     <OnboardingModal title={t('onboardingTitle')}>
-      <p className={styles.description}>{t('onboardingDescription')}</p>
+      <p className={styles.description}>
+        Select your AI model provider to sign in with OAuth or configure an API key.
+      </p>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <button
+          type="button"
+          style={{
+            flex: 1,
+            padding: '10px 12px',
+            borderRadius: 'var(--dsw-radius-m)',
+            border: (row.entry.provider === 'openai')
+              ? '2px solid var(--dsw-alias-brand-primary)'
+              : '0.5px solid var(--dsw-alias-border-l2)',
+            background: (row.entry.provider === 'openai')
+              ? 'var(--dsw-alias-brand-secondary, rgba(0, 120, 212, 0.08))'
+              : 'var(--dsw-alias-settings-card-fill)',
+            color: 'var(--dsw-alias-label-primary)',
+            fontWeight: (row.entry.provider === 'openai') ? 600 : 400,
+            cursor: 'pointer',
+            textAlign: 'center',
+            fontSize: 13,
+          }}
+          onClick={() => setSelectedProvider('openai')}
+        >
+          OpenAI
+        </button>
+        <button
+          type="button"
+          style={{
+            flex: 1,
+            padding: '10px 12px',
+            borderRadius: 'var(--dsw-radius-m)',
+            border: (row.entry.provider === 'anthropic')
+              ? '2px solid var(--dsw-alias-brand-primary)'
+              : '0.5px solid var(--dsw-alias-border-l2)',
+            background: (row.entry.provider === 'anthropic')
+              ? 'var(--dsw-alias-brand-secondary, rgba(0, 120, 212, 0.08))'
+              : 'var(--dsw-alias-settings-card-fill)',
+            color: 'var(--dsw-alias-label-primary)',
+            fontWeight: (row.entry.provider === 'anthropic') ? 600 : 400,
+            cursor: 'pointer',
+            textAlign: 'center',
+            fontSize: 13,
+          }}
+          onClick={() => setSelectedProvider('anthropic')}
+        >
+          Anthropic
+        </button>
+        <button
+          type="button"
+          style={{
+            flex: 1,
+            padding: '10px 12px',
+            borderRadius: 'var(--dsw-radius-m)',
+            border: (row.entry.provider === 'deepseek-official')
+              ? '2px solid var(--dsw-alias-brand-primary)'
+              : '0.5px solid var(--dsw-alias-border-l2)',
+            background: (row.entry.provider === 'deepseek-official')
+              ? 'var(--dsw-alias-brand-secondary, rgba(0, 120, 212, 0.08))'
+              : 'var(--dsw-alias-settings-card-fill)',
+            color: 'var(--dsw-alias-label-primary)',
+            fontWeight: (row.entry.provider === 'deepseek-official') ? 600 : 400,
+            cursor: 'pointer',
+            textAlign: 'center',
+            fontSize: 13,
+          }}
+          onClick={() => setSelectedProvider('deepseek-official')}
+        >
+          DeepSeek
+        </button>
+      </div>
+
       <div className={styles.editor}>
         <ProviderEditor
+          key={row.entry.provider}
           provider={row.entry.provider}
           displayName={row.entry.displayName}
           namespace={namespace}
@@ -122,7 +197,7 @@ export function DeepSeekOnboardingDialog(props: DeepSeekOnboardingDialogProps): 
           hideTitle
           credentialOnly
           onSubmitCredential={() => { props.track?.('api_key_save_click', {}) }}
-          credentialRequired
+          credentialRequired={row.entry.provider === 'deepseek-official'}
           autoFocusCredential
           cancelLabelKey="onboardingLater"
           submitLabelKey="onboardingSave"
