@@ -76,8 +76,11 @@ async function buildNativeSystem(): Promise<void> {
   if (pnpmEntry === undefined || pnpmEntry === '') {
     throw new Error(`desktop package: flock addon is not built; run ${BUILD_COMMAND_TEXT} or invoke this script through a pnpm package command`)
   }
+  const isExe = pnpmEntry.toLowerCase().endsWith('.exe') || pnpmEntry.toLowerCase().endsWith('.cmd')
+  const executable = isExe ? pnpmEntry : process.execPath
   for (const args of BUILD_COMMANDS) {
-    const child = spawn(process.execPath, [pnpmEntry, ...args], { cwd: REPOSITORY_ROOT, stdio: 'inherit' })
+    const spawnArgs = isExe ? args : [pnpmEntry, ...args]
+    const child = spawn(executable, spawnArgs, { cwd: REPOSITORY_ROOT, stdio: 'inherit' })
     const [code, signal] = await once(child, 'close') as [number | null, NodeJS.Signals | null]
     if (code !== 0) throw new Error(`desktop package: pnpm ${args.join(' ')} exited with ${String(code ?? signal)}`)
   }
