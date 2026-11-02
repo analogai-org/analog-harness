@@ -129,7 +129,7 @@ export async function connectDesktopWelcome(
     for (const url of ['http://127.0.0.1:8071/v1/agents/default', 'http://localhost:8071/v1/agents/default']) {
       try {
         const controller = new AbortController()
-        const timer = setTimeout(() => controller.abort(), 1000)
+        const timer = setTimeout(() => controller.abort(), 3000)
         const [modelsRes, provRes] = await Promise.all([
           fetch(`${url}/models`, { signal: controller.signal }),
           fetch(`${url}/providers`, { signal: controller.signal }),
@@ -140,9 +140,7 @@ export async function connectDesktopWelcome(
           const provBody = (await provRes.json()) as unknown
           const modelsList = Array.isArray(modelsBody) ? modelsBody : (modelsBody as any)?.models || []
           const provList = Array.isArray(provBody) ? provBody : (provBody as any)?.providers || []
-          const hasReasoning = modelsList.some((m: any) => (m.type === 'reasoning' || m.model_type === 'reasoning') && m.name)
-          const hasFast = modelsList.some((m: any) => (m.type === 'fast' || m.model_type === 'fast') && m.name)
-          if (hasReasoning && hasFast && provList.length > 0) {
+          if (modelsList.length > 0 && provList.length > 0) {
             hasMicroserviceModels = true
             break
           }

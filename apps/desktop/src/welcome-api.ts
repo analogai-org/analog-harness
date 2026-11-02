@@ -92,11 +92,11 @@ export interface WelcomeAuthentication {
 /**
  * Decide whether a startup or sign-out requires the welcome entry.
  * @param authentication - current account and independently stored API-key facts.
- * @returns true only when neither authentication route is configured or chat microservice models are not setup.
+ * @returns true only when microservice has no models configured and neither authentication route is configured.
  */
 export function needsWelcome(authentication: WelcomeAuthentication): boolean {
-  if (!authentication.hasMicroserviceModels) {
-    return true
+  if (authentication.hasMicroserviceModels) {
+    return false
   }
   return !authentication.loggedIn && !authentication.hasApiKey
 }
