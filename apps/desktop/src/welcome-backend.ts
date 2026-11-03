@@ -204,25 +204,40 @@ export async function connectDesktopWelcome(
           }
         }
 
-        // 3. Attach upstream provider
-        const providerRes = await fetch(`${localChatUrl}/v1/agents/${agentId}/providers`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            agent_id: agentId,
-            name: params.providerType,
-            api_key: params.providerApiKey,
-            base_url: params.providerBaseUrl || undefined,
-          }),
-        })
-
-        if (!providerRes.ok) {
-          const errData = await providerRes.json().catch(() => ({}))
-          return { ok: false, error: (errData as { detail?: string }).detail || 'Failed to configure provider' }
+        // 3. Attach or reuse existing upstream provider
+        let providerId = ''
+        const existingProvidersRes = await fetch(`${localChatUrl}/v1/providers`).catch(() => null)
+        if (existingProvidersRes && existingProvidersRes.ok) {
+          const existingProviders = (await existingProvidersRes.json()) as Array<{ id: string; name: string }>
+          const found = existingProviders.find(
+            p => p.name?.toLowerCase() === params.providerType?.toLowerCase() ||
+                 (params.providerType === 'openai' && p.name?.toLowerCase().includes('openai')) ||
+                 (params.providerType === 'anthropic' && p.name?.toLowerCase().includes('anthropic'))
+          )
+          if (found) {
+            providerId = found.id
+          }
         }
 
-        const providerData = (await providerRes.json()) as { id: string }
-        const providerId = providerData.id
+        if (!providerId) {
+          const providerRes = await fetch(`${localChatUrl}/v1/providers`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: params.providerType,
+              api_key: params.providerApiKey,
+              base_url: params.providerBaseUrl || undefined,
+            }),
+          })
+
+          if (!providerRes.ok) {
+            const errData = await providerRes.json().catch(() => ({}))
+            return { ok: false, error: (errData as { detail?: string }).detail || 'Failed to configure provider' }
+          }
+
+          const providerData = (await providerRes.json()) as { id: string }
+          providerId = providerData.id
+        }
 
         // 4. Attach Reasoning (Teacher) model
         if (params.reasoningModel) {

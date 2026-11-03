@@ -6,8 +6,6 @@ import {
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { AccountSectionInjected } from './AccountSection.tsx'
 import { SignInDialog } from './SignInDialog.tsx'
-import { AccountAvatar } from './AccountAvatar.tsx'
-import { AccountNoticeCard } from './AccountNotice.tsx'
 import css from './AccountMenu.module.css'
 
 /** Account launcher composed by the settings shell. */
@@ -19,7 +17,7 @@ export type AccountMenuProps = PropsRuntime<'settings.launcher'> & PropsLocale<'
  */
 export function AccountMenu({
   subscribeSessionExpired, subscribeModelSignInRequired, wide, settingsShortcut, openSettings, openOnboarding, settingsOpen,
-  useAccount, useTheme, refreshAccount, bonusNoticeShown, bonusNoticeDismissed,
+  useAccount, useTheme, refreshAccount, bonusNoticeShown: _bonusNoticeShown, bonusNoticeDismissed: _bonusNoticeDismissed,
   contactUs: _contactUs, showLogin, start, cancel, t,
 }: AccountMenuProps) {
   const anchor = useRef<HTMLDivElement>(null)
@@ -32,29 +30,20 @@ export function AccountMenu({
   }, [refreshAccount, settingsOpen])
   const account = useAccount(state => state)
   const colorScheme = useTheme(snapshot => snapshot.active.colorScheme)
-  const signedIn = account.view?.status === 'credential-stored'
   const [signInNotice, setSignInNotice] = useState(0)
   useEffect(() => subscribeModelSignInRequired?.(() => { setSignInNotice(value => value + 1) }), [subscribeModelSignInRequired])
   const [expiryNotice, setExpiryNotice] = useState(false)
   useEffect(() => subscribeSessionExpired?.(() => { setExpiryNotice(true) }), [subscribeSessionExpired])
-  const profile = account.details?.profile
-  const label = profile === undefined ? null : profile.status === 'ready'
-    ? profile.value.name ?? profile.value.contact ?? t('signedIn') : t('signedIn')
   const [open, setOpen] = useState(false)
   const trigger = useRef<HTMLButtonElement>(null)
   return <div ref={anchor} className={css.root}>
     {signInNotice > 0 && <Toast key={signInNotice} text={t('modelSignInRequired')} onDone={() => { setSignInNotice(0) }} />}
     {expiryNotice && <Toast text={t('sessionExpired')} onDone={() => { setExpiryNotice(false) }} />}
-    {signedIn && account.notice && <AccountNoticeCard key={account.notice.orderId} notice={account.notice}
-      anchor={anchor} title={t('bonusNoticeTitle')} closeLabel={t('close')}
-      onShown={bonusNoticeShown} onDismiss={bonusNoticeDismissed} />}
-    <Menu open={open} side="top" portal autoFocus className={css.anchor} listClassName={signedIn ? undefined : css.signedOutMenu}
-      anchor={<button ref={trigger} type="button" className={css.trigger} data-collapsed={!wide} data-signed-out={!signedIn} aria-label={t('menu')}
+    <Menu open={open} side="top" portal autoFocus className={css.anchor} listClassName={css.signedOutMenu}
+      anchor={<button ref={trigger} type="button" className={css.trigger} data-collapsed={!wide} aria-label={t('menu')}
         aria-haspopup="menu" aria-expanded={open} onClick={() => { setOpen(value => !value) }}>
-        {signedIn
-          ? <span className={css.avatar}><AccountAvatar url={profile?.status === 'ready' ? profile.value.avatarUrl : null} /></span>
-          : <IconEllipsisOutlineMedium size={14} />}
-        {wide && <span className={css.label}>{signedIn ? label : t('more')}</span>}
+        <IconEllipsisOutlineMedium size={14} />
+        {wide && <span className={css.label}>{t('more')}</span>}
       </button>}
       items={[
         { id: 'settings', label: t('settings'), icon: <IconSettingsOutlineMedium size={16} />,

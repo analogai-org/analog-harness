@@ -229,9 +229,9 @@ export function ModelsSection(_props?: ModelsSectionProps) {
         }
       }
 
-      // 3. Fetch providers for active agent
+      // 3. Fetch providers
       let loadedProviders: ProviderItem[] = []
-      const provRes = await fetch(`${CHAT_BASE_URL}/v1/agents/${currentAgentId}/providers`)
+      const provRes = await fetch(`${CHAT_BASE_URL}/v1/providers`)
       if (provRes.ok) {
         const provData = await provRes.json()
         loadedProviders = Array.isArray(provData) ? provData : provData.providers || []
@@ -392,13 +392,13 @@ export function ModelsSection(_props?: ModelsSectionProps) {
 
       let res: Response
       if (editingProvider) {
-        res = await fetch(`${CHAT_BASE_URL}/v1/agents/${activeAgentId}/providers/${editingProvider.id}`, {
+        res = await fetch(`${CHAT_BASE_URL}/v1/providers/${editingProvider.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         })
       } else {
-        res = await fetch(`${CHAT_BASE_URL}/v1/agents/${activeAgentId}/providers`, {
+        res = await fetch(`${CHAT_BASE_URL}/v1/providers`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -423,7 +423,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
   const handleDeleteProvider = async (providerId: string) => {
     try {
       setErrorMsg(null)
-      const res = await fetch(`${CHAT_BASE_URL}/v1/agents/${activeAgentId}/providers/${providerId}`, {
+      const res = await fetch(`${CHAT_BASE_URL}/v1/providers/${providerId}`, {
         method: 'DELETE',
       })
       if (!res.ok) {
@@ -845,7 +845,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
                 type="text"
                 value={selectedModelName}
                 onChange={e => setSelectedModelName(e.target.value)}
-                placeholder="e.g. deepseek-reasoner, gpt-4o, claude-3-7-sonnet"
+                placeholder="e.g. deepseek-reasoner, gpt-5.4-mini, claude-3-7-sonnet"
               />
             </div>
 
