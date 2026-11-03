@@ -647,7 +647,7 @@ body {
   cursor: not-allowed;
 }
 
-/* OpenAI Subscription (OAuth) Card */
+/* OpenAI & Anthropic Subscription (OAuth) Cards */
 .openai-subscription-card {
   display: flex;
   flex-direction: column;
@@ -659,14 +659,27 @@ body {
   box-sizing: border-box;
 }
 
-.openai-subscription-header {
+.anthropic-subscription-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-sizing: border-box;
+}
+
+.openai-subscription-header,
+.anthropic-subscription-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
 
-.openai-subscription-title {
+.openai-subscription-title,
+.anthropic-subscription-title {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -696,7 +709,29 @@ body {
   background: #0e8f6f;
 }
 
-.openai-desc {
+.anthropic-login-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  height: 32px;
+  background: #f59e0b;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+  white-space: nowrap;
+}
+
+.anthropic-login-btn:hover {
+  background: #d97706;
+}
+
+.openai-desc,
+.anthropic-desc {
   margin: 0;
   font-size: 12px;
   line-height: 16px;
@@ -712,6 +747,19 @@ body {
   color: #10a37f;
   font-weight: 500;
   background: rgba(16, 163, 127, 0.12);
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+.anthropic-connected-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  color: #f59e0b;
+  font-weight: 500;
+  background: rgba(245, 158, 11, 0.12);
   padding: 6px 10px;
   border-radius: 6px;
 }

@@ -130,17 +130,12 @@ export async function connectDesktopWelcome(
       try {
         const controller = new AbortController()
         const timer = setTimeout(() => controller.abort(), 3000)
-        const [modelsRes, provRes] = await Promise.all([
-          fetch(`${url}/models`, { signal: controller.signal }),
-          fetch(`${url}/providers`, { signal: controller.signal }),
-        ])
+        const modelsRes = await fetch(`${url}/models`, { signal: controller.signal })
         clearTimeout(timer)
-        if (modelsRes.ok && provRes.ok) {
+        if (modelsRes.ok) {
           const modelsBody = (await modelsRes.json()) as unknown
-          const provBody = (await provRes.json()) as unknown
           const modelsList = Array.isArray(modelsBody) ? modelsBody : (modelsBody as any)?.models || []
-          const provList = Array.isArray(provBody) ? provBody : (provBody as any)?.providers || []
-          if (modelsList.length > 0 && provList.length > 0) {
+          if (modelsList.length > 0) {
             hasMicroserviceModels = true
             break
           }

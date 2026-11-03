@@ -54,8 +54,8 @@ describe('desktop welcome window', () => {
   it.each(['darwin', 'win32', 'linux'] as const)('keeps the %s preview fixed-size and sandboxed', (platform) => {
     const options = welcomeWindowOptions(platform, resolveDesktopLocale('zh-CN'))
     expect(options).toMatchObject({
-      width: 600, height: 700, useContentSize: true, center: true, show: false,
-      resizable: false, maximizable: false, fullscreenable: false,
+      width: 640, height: 780, useContentSize: true, center: true, show: false,
+      resizable: true, maximizable: false, fullscreenable: false,
       webPreferences: {
         nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true,
         additionalArguments: ['--dsh-welcome-locale=zh-CN'],
@@ -181,11 +181,11 @@ describe('desktop welcome window', () => {
     expect(electron.handlers.size).toBe(0)
   })
 
-  it('shows the entry after logout only without a separately configured API key', () => {
-    expect(needsWelcome({ loggedIn: true, hasApiKey: false })).toBe(false)
-    expect(needsWelcome({ loggedIn: false, hasApiKey: false })).toBe(true)
-    expect(needsWelcome({ loggedIn: false, hasApiKey: true })).toBe(false)
-    expect(needsWelcome({ loggedIn: true, hasApiKey: true })).toBe(false)
+  it('shows the entry when microservice has no models configured', () => {
+    expect(needsWelcome({ loggedIn: true, hasApiKey: false, hasMicroserviceModels: false })).toBe(true)
+    expect(needsWelcome({ loggedIn: false, hasApiKey: true, hasMicroserviceModels: false })).toBe(true)
+    expect(needsWelcome({ loggedIn: false, hasApiKey: false, hasMicroserviceModels: true })).toBe(false)
+    expect(needsWelcome({ loggedIn: true, hasApiKey: true, hasMicroserviceModels: true })).toBe(false)
   })
 })
 

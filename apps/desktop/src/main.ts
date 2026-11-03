@@ -28,6 +28,7 @@ import { DesktopHostFatalError, DesktopHostProcess, DesktopHostUncleanExitError 
 import { DesktopPlatformView, PLATFORM_IPC, platformBounds } from './platform-view.ts'
 import { installDesktopDirectoryPicker } from './directory-picker.ts'
 import { installMicrophonePermissions } from './microphone-permissions.ts'
+import { loadLayeredEnv } from '@deepseek-ai/dsh-app-boot'
 import { exec, execSync, spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
@@ -111,7 +112,11 @@ async function ensureAnalogChatBackend(): Promise<void> {
       try {
         chatBackendProcess = spawn(pyExe, ['main.py'], {
           cwd: chatDir,
-          env: { ...process.env, PORT: '8071' },
+          env: {
+            ...process.env,
+            PORT: '8071',
+            ENVIRONMENT: process.env.ENVIRONMENT ?? 'development',
+          },
           stdio: ['ignore', 'pipe', 'pipe'],
         })
 
@@ -433,6 +438,13 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
 }
 
 async function main(): Promise<void> {
+  if (!app.isPackaged) {
+    try {
+      loadLayeredEnv('dsh-desktop', resolve(app.getAppPath(), '..', '..'))
+    } catch {
+      // Ignore if .env does not exist or fails validation
+    }
+  }
   await ensureAnalogChatBackend()
   void pruneCrashReports(app.getPath('logs'))
   const journalDirectory = process.env.DSH_DESKTOP_UPDATE_JOURNAL_DIR

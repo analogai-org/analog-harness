@@ -48,12 +48,12 @@ interface ProviderPreset {
   keyHint: string
 }
 
-const PRESETS: ProviderPreset[] = [
+const DEFAULT_PRESETS: ProviderPreset[] = [
   { id: 'openai', name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', keyHint: 'sk-...' },
   { id: 'anthropic', name: 'Anthropic', baseUrl: 'https://api.anthropic.com/v1', keyHint: 'sk-ant-...' },
   { id: 'gemini', name: 'Google Gemini', baseUrl: '', keyHint: 'AIzaSy...' },
-  { id: 'deepseek', name: 'DeepSeek', baseUrl: '', keyHint: 'sk-...' },
-  { id: 'groq', name: 'Groq', baseUrl: '', keyHint: 'gsk_...' },
+  { id: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', keyHint: 'sk-...' },
+  { id: 'grok', name: 'Grok (xAI)', baseUrl: 'https://api.x.ai/v1', keyHint: 'xai-...' },
   { id: 'mistral', name: 'Mistral AI', baseUrl: '', keyHint: '...' },
   { id: 'together', name: 'Together AI', baseUrl: '', keyHint: '...' },
   { id: 'openrouter', name: 'OpenRouter', baseUrl: '', keyHint: 'sk-or-...' },
@@ -124,6 +124,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
   const [_agents, setAgents] = useState<AgentItem[]>([])
   const [activeAgentId, setActiveAgentId] = useState<string>('default')
   const [providers, setProviders] = useState<ProviderItem[]>([])
+  const [presets, setPresets] = useState<ProviderPreset[]>(DEFAULT_PRESETS)
   const [models, setModels] = useState<ModelItem[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -156,8 +157,8 @@ export function ModelsSection(_props?: ModelsSectionProps) {
   const checkAuthStatuses = useCallback(async () => {
     try {
       const [oRes, aRes] = await Promise.all([
-        fetch(`${CHAT_BASE_URL}/v1/auth/openai/status`).catch(() => null),
-        fetch(`${CHAT_BASE_URL}/v1/auth/anthropic/status`).catch(() => null),
+        fetch(`${CHAT_BASE_URL}/v1/auth/openai/status`, { signal: AbortSignal.timeout(3000) }).catch(() => null),
+        fetch(`${CHAT_BASE_URL}/v1/auth/anthropic/status`, { signal: AbortSignal.timeout(3000) }).catch(() => null),
       ])
       if (oRes && oRes.ok) {
         const data = await oRes.json()
@@ -187,7 +188,33 @@ export function ModelsSection(_props?: ModelsSectionProps) {
       setLoading(true)
       setErrorMsg(null)
 
-      // 1. Fetch agents
+      // 1. Fetch available-providers dynamically to sync catalog presets
+      try {
+        let pRes = await fetch(`${CHAT_BASE_URL}/v1/available-providers`, { signal: AbortSignal.timeout(3000) }).catch(() => null)
+        if (!pRes || !pRes.ok) {
+          pRes = await fetch(`${CHAT_BASE_URL}/available-providers`, { signal: AbortSignal.timeout(3000) }).catch(() => null)
+        }
+        if (pRes && pRes.ok) {
+          const pData = await pRes.json()
+          if (pData && Array.isArray(pData.providers) && pData.providers.length > 0) {
+            const dynamicPresets: ProviderPreset[] = pData.providers.map((p: any) => ({
+              id: p.id,
+              name: p.name,
+              baseUrl: p.baseUrl || p.base_url || '',
+              keyHint: p.id === 'openai' ? 'OAuth or sk-...' : p.id === 'anthropic' ? 'OAuth or sk-ant-...' : 'API Key',
+            }))
+            // Add custom if not present
+            if (!dynamicPresets.some(p => p.id === 'custom')) {
+              dynamicPresets.push({ id: 'custom', name: 'Custom OpenAI-Compatible', baseUrl: '', keyHint: '...' })
+            }
+            setPresets(dynamicPresets)
+          }
+        }
+      } catch {
+        // Fallback to DEFAULT_PRESETS if available-providers endpoint fails
+      }
+
+      // 2. Fetch agents
       let currentAgentId = activeAgentId
       const agentRes = await fetch(`${CHAT_BASE_URL}/v1/agents`)
       if (agentRes.ok) {
@@ -202,7 +229,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
         }
       }
 
-      // 2. Fetch providers for active agent
+      // 3. Fetch providers for active agent
       let loadedProviders: ProviderItem[] = []
       const provRes = await fetch(`${CHAT_BASE_URL}/v1/agents/${currentAgentId}/providers`)
       if (provRes.ok) {
@@ -211,7 +238,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
         setProviders(loadedProviders)
       }
 
-      // 3. Fetch models for active agent
+      // 4. Fetch models for active agent
       let loadedModels: ModelItem[] = []
       const modRes = await fetch(`${CHAT_BASE_URL}/v1/agents/${currentAgentId}/models`)
       if (modRes.ok) {
@@ -220,30 +247,10 @@ export function ModelsSection(_props?: ModelsSectionProps) {
         setModels(loadedModels)
       }
 
-      // 4. Fetch OAuth status
+      // 5. Fetch OAuth status
       void checkAuthStatuses()
 
-      // Sync to localStorage and notify other UI components
-      try {
-        const configuredList: Array<{ id: string; name: string; provider: string; category?: string }> = []
-        for (const m of loadedModels) {
-          const p = loadedProviders.find(pr => pr.id === m.provider_id)
-          const pName = p ? (p.display_name || p.name) : (m.provider_id || 'custom')
-          const mName = m.name || m.model_name || m.id
-          if (mName && mName !== 'Not Configured') {
-            configuredList.push({
-              id: m.id || mName,
-              name: mName,
-              provider: pName.toLowerCase(),
-              category: m.type || m.model_type || 'default',
-            })
-          }
-        }
-        localStorage.setItem('analog_configured_models', JSON.stringify(configuredList))
-        window.dispatchEvent(new CustomEvent('analog-models-updated'))
-      } catch {
-        // ignore
-      }
+
     } catch (err: any) {
       setErrorMsg(`Could not connect to Chat backend at ${CHAT_BASE_URL}. Ensure chat service is running.`)
     } finally {
@@ -313,37 +320,6 @@ export function ModelsSection(_props?: ModelsSectionProps) {
     }
   }
 
-  const handleQuickSetOAuthProvider = async (pType: 'openai' | 'anthropic') => {
-    const existing = providers.find(p => p.name.toLowerCase() === pType || p.display_name?.toLowerCase().includes(pType))
-    const displayName = pType === 'openai' ? 'OpenAI (Codex)' : 'Anthropic (Claude Code)'
-    const payload = {
-      name: pType,
-      display_name: displayName,
-      base_url: pType === 'openai' ? 'https://api.openai.com/v1' : 'https://api.anthropic.com/v1',
-      api_key: `oauth:${pType}:default`,
-      agent_id: activeAgentId,
-    }
-
-    try {
-      if (existing) {
-        await fetch(`${CHAT_BASE_URL}/v1/agents/${activeAgentId}/providers/${existing.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-      } else {
-        await fetch(`${CHAT_BASE_URL}/v1/agents/${activeAgentId}/providers`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-      }
-      await loadData()
-    } catch (err: any) {
-      setErrorMsg(`Failed to configure ${displayName}: ` + (err?.message || ''))
-    }
-  }
-
   // --- Provider Modal Actions ---
   const openAddProviderModal = () => {
     setEditingProvider(null)
@@ -356,8 +332,9 @@ export function ModelsSection(_props?: ModelsSectionProps) {
 
   const openEditProviderModal = (p: ProviderItem) => {
     setEditingProvider(p)
-    const match = PRESETS.find(pr => pr.baseUrl === p.base_url || pr.name.toLowerCase() === p.name.toLowerCase())
-    setProviderPreset(match ? match.id : 'custom')
+    const match = presets.find(pr => pr.baseUrl === p.base_url || pr.name.toLowerCase() === p.name.toLowerCase() || pr.id === p.name.toLowerCase())
+    const presetId = match ? match.id : (p.name.toLowerCase() === 'openai' ? 'openai' : p.name.toLowerCase() === 'anthropic' ? 'anthropic' : 'custom')
+    setProviderPreset(presetId)
     setProviderName(p.display_name || p.name)
     setProviderBaseUrl(p.base_url || '')
     setProviderApiKey(p.api_key || '')
@@ -366,30 +343,50 @@ export function ModelsSection(_props?: ModelsSectionProps) {
 
   const handlePresetChange = (presetId: string) => {
     setProviderPreset(presetId)
-    const match = PRESETS.find(p => p.id === presetId)
+    const match = presets.find(p => p.id === presetId)
     if (match) {
       if (presetId !== 'custom') {
         setProviderName(match.name)
         setProviderBaseUrl(match.baseUrl)
       }
     }
-    if (presetId === 'openai' && openAIAuth?.connected && !providerApiKey) {
+    if (presetId === 'openai') {
       setProviderApiKey('oauth:openai:default')
-    } else if (presetId === 'anthropic' && anthropicAuth?.connected && !providerApiKey) {
+    } else if (presetId === 'anthropic') {
       setProviderApiKey('oauth:anthropic:default')
     }
   }
 
   const handleSaveProvider = async () => {
     if (!providerName.trim()) return
+
+    const isOpenAI = providerPreset === 'openai'
+    const isAnthropic = providerPreset === 'anthropic'
+    const isOAuth = isOpenAI || isAnthropic
+
+    if (isOpenAI && !openAIAuth?.connected) {
+      setErrorMsg('Please sign in with OpenAI before saving.')
+      return
+    }
+    if (isAnthropic && !anthropicAuth?.connected) {
+      setErrorMsg('Please sign in with Anthropic before saving.')
+      return
+    }
+
+    const effectiveApiKey = isOpenAI
+      ? 'oauth:openai:default'
+      : isAnthropic
+        ? 'oauth:anthropic:default'
+        : providerApiKey.trim()
+
     try {
       setProviderSaving(true)
       setErrorMsg(null)
       const payload: Record<string, any> = {
         name: providerName.trim(),
         display_name: providerName.trim(),
-        base_url: providerBaseUrl.trim() || null,
-        api_key: providerApiKey.trim(),
+        base_url: isOAuth ? (providerPreset === 'openai' ? 'https://api.openai.com/v1' : 'https://api.anthropic.com/v1') : (providerBaseUrl.trim() || null),
+        api_key: effectiveApiKey,
         agent_id: activeAgentId,
       }
 
@@ -518,13 +515,15 @@ export function ModelsSection(_props?: ModelsSectionProps) {
     return found ? (found.display_name || found.name) : 'Unknown'
   }
 
+  const isSelectedOAuth = providerPreset === 'openai' || providerPreset === 'anthropic'
+
   return (
     <div className={styles.section}>
       {/* Header */}
       <div className={styles.pageHeader}>
         <h2 className={styles.pageTitle}>Models & Providers</h2>
         <p className={styles.pageSubtitle}>
-          Configure AI providers, API keys, OAuth subscription logins, and assign reasoning and fast models.
+          Configure AI providers, API keys, and assign reasoning and fast models.
         </p>
       </div>
 
@@ -534,134 +533,11 @@ export function ModelsSection(_props?: ModelsSectionProps) {
         </div>
       )}
 
-      {/* BYOK & Direct Subscriptions Callout */}
-      <div className={styles.byokBanner}>
-        <strong>Bring Your Own Key & Subscriptions:</strong> Connect your accounts directly using API keys or log in via OpenAI (ChatGPT Plus/Pro / Codex) and Anthropic (Claude Pro/Max / Claude Code) OAuth subscriptions. Credentials and tokens remain 100% on your local machine.
-      </div>
-
-      {/* Section 1: Subscriptions & OAuth Logins */}
-      <div className={styles.sectionBlock}>
-        <div className={styles.sectionHeaderWithSubtitle}>
-          <h3 className={styles.sectionTitle}>Direct Subscriptions & OAuth Login</h3>
-          <p className={styles.sectionSubtitle}>
-            Sign in with your OpenAI or Anthropic account to use models from your existing Plus, Pro, or Max plans.
-          </p>
-        </div>
-
-        <div className={styles.oauthGrid}>
-          {/* OpenAI / Codex Card */}
-          <div className={styles.oauthCard}>
-            <div className={styles.oauthHeader}>
-              <div className={styles.oauthBrand}>
-                <OpenAIIcon style={{ color: '#10a37f' }} />
-                <span>OpenAI / Codex</span>
-              </div>
-              {openAIAuth?.connected ? (
-                <span className={styles.oauthStatusBadgeConnected}>
-                  <span className={styles.oauthStatusDot} />
-                  Connected
-                </span>
-              ) : (
-                <span className={styles.oauthStatusBadgeDisconnected}>
-                  <span className={styles.oauthStatusDot} />
-                  Not Connected
-                </span>
-              )}
-            </div>
-
-            <p className={styles.oauthText} style={{ margin: 0 }}>
-              Use your existing ChatGPT Plus or Pro subscription and Codex CLI integration. Tokens refresh automatically.
-            </p>
-
-            <div className={styles.oauthFooter}>
-              <div className={styles.oauthEmail} title={openAIAuth?.account_email || ''}>
-                {openAIAuth?.connected ? (openAIAuth.account_email || 'Subscription Active') : 'No API key required'}
-              </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {openAIAuth?.connected && (
-                  <Button
-                    variant="ghost"
-                    onClick={() => handleQuickSetOAuthProvider('openai')}
-                    title="Ensure this provider is active in the table below"
-                  >
-                    Set as Provider
-                  </Button>
-                )}
-                <Button
-                  variant="outline"
-                  onClick={() => handleOAuthLogin('openai')}
-                  disabled={loggingInProvider === 'openai'}
-                >
-                  {loggingInProvider === 'openai'
-                    ? 'Signing in...'
-                    : openAIAuth?.connected
-                      ? 'Switch Account'
-                      : 'Sign in with OpenAI'}
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {/* Anthropic / Claude Code Card */}
-          <div className={styles.oauthCard}>
-            <div className={styles.oauthHeader}>
-              <div className={styles.oauthBrand}>
-                <AnthropicIcon style={{ color: '#f59e0b' }} />
-                <span>Anthropic / Claude Code</span>
-              </div>
-              {anthropicAuth?.connected ? (
-                <span className={styles.oauthStatusBadgeConnectedAnthropic}>
-                  <span className={styles.oauthStatusDot} />
-                  Connected
-                </span>
-              ) : (
-                <span className={styles.oauthStatusBadgeDisconnected}>
-                  <span className={styles.oauthStatusDot} />
-                  Not Connected
-                </span>
-              )}
-            </div>
-
-            <p className={styles.oauthText} style={{ margin: 0 }}>
-              Use your existing Claude Pro or Max subscription and Claude Code CLI integration. Tokens refresh automatically.
-            </p>
-
-            <div className={styles.oauthFooter}>
-              <div className={styles.oauthEmail} title={anthropicAuth?.account_email || ''}>
-                {anthropicAuth?.connected ? (anthropicAuth.account_email || 'Subscription Active') : 'No API key required'}
-              </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {anthropicAuth?.connected && (
-                  <Button
-                    variant="ghost"
-                    onClick={() => handleQuickSetOAuthProvider('anthropic')}
-                    title="Ensure this provider is active in the table below"
-                  >
-                    Set as Provider
-                  </Button>
-                )}
-                <Button
-                  variant="outline"
-                  onClick={() => handleOAuthLogin('anthropic')}
-                  disabled={loggingInProvider === 'anthropic'}
-                >
-                  {loggingInProvider === 'anthropic'
-                    ? 'Signing in...'
-                    : anthropicAuth?.connected
-                      ? 'Switch Account'
-                      : 'Sign in with Anthropic'}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Section 2: Providers Table */}
       <div className={styles.sectionBlock}>
         <div className={styles.sectionHeaderWithSubtitle}>
           <h3 className={styles.sectionTitle}>Configured Providers</h3>
-          <p className={styles.sectionSubtitle}>Active endpoint connections and API keys for this agent.</p>
+          <p className={styles.sectionSubtitle}>Active endpoint connections and credentials for this agent.</p>
         </div>
 
         <div className={styles.tableCard}>
@@ -683,7 +559,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
                 </tr>
               ) : (
                 providers.map(p => {
-                  const isOAuthKey = p.api_key?.startsWith('oauth:')
+                  const isOAuthKey = p.api_key?.startsWith('oauth:') || p.name.toLowerCase() === 'openai' || p.name.toLowerCase() === 'anthropic'
                   return (
                     <tr key={p.id}>
                       <td className={styles.td}>
@@ -811,7 +687,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
                 value={providerPreset}
                 onChange={e => handlePresetChange(e.target.value)}
               >
-                {PRESETS.map(p => (
+                {presets.map(p => (
                   <option key={p.id} value={p.id}>
                     {p.name}
                   </option>
@@ -831,7 +707,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
                     <div style={{ fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', marginTop: 2 }}>
                       {openAIAuth?.connected
                         ? `Connected (${openAIAuth.account_email || 'Account active'}). Tokens auto-refresh.`
-                        : 'Sign in to use your Plus/Pro plan and Codex CLI without an API key.'}
+                        : 'Sign in with your OpenAI account. No API key required.'}
                     </div>
                   </div>
                   <Button
@@ -855,12 +731,12 @@ export function ModelsSection(_props?: ModelsSectionProps) {
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 13, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <AnthropicIcon style={{ color: '#f59e0b' }} />
-                      <span>Use Anthropic / Claude Code</span>
+                      <span>Use Anthropic / Claude Subscription</span>
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', marginTop: 2 }}>
                       {anthropicAuth?.connected
                         ? `Connected (${anthropicAuth.account_email || 'Account active'}). Tokens auto-refresh.`
-                        : 'Sign in to use your Claude Pro/Max plan and Claude Code CLI without an API key.'}
+                        : 'Sign in with your Anthropic account. No API key required.'}
                     </div>
                   </div>
                   <Button
@@ -888,23 +764,28 @@ export function ModelsSection(_props?: ModelsSectionProps) {
               />
             </div>
 
-            <div className={styles.formGroup}>
-              <label className={styles.formLabel}>API Key</label>
-              <input
-                className={styles.formInput}
-                type="password"
-                value={providerApiKey}
-                onChange={e => setProviderApiKey(e.target.value)}
-                placeholder={PRESETS.find(p => p.id === providerPreset)?.keyHint || 'sk-...'}
-              />
-              <span className={styles.formHelp}>
-                {providerApiKey.startsWith('oauth:')
-                  ? 'Using OAuth subscription token credentials.'
-                  : 'Your API key is securely saved directly in your Chat backend.'}
-              </span>
-            </div>
+            {/* API Key input: completely hidden for OAuth providers */}
+            {!isSelectedOAuth && (
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>
+                  {providerPreset === 'ollama' || providerPreset === 'vllm' ? 'API Key (Not required for local servers)' : 'API Key'}
+                </label>
+                <input
+                  className={styles.formInput}
+                  type="password"
+                  value={providerApiKey}
+                  onChange={e => setProviderApiKey(e.target.value)}
+                  placeholder={presets.find(p => p.id === providerPreset)?.keyHint || 'sk-...'}
+                />
+                <span className={styles.formHelp}>
+                  {providerPreset === 'ollama' || providerPreset === 'vllm'
+                    ? 'Local endpoints do not require an API key unless configured with one.'
+                    : 'Your API key is securely saved directly in your Chat backend.'}
+                </span>
+              </div>
+            )}
 
-            {(providerPreset === 'custom' || providerPreset === 'ollama' || providerPreset === 'vllm') && (
+            {!isSelectedOAuth && (providerPreset === 'custom' || providerPreset === 'ollama' || providerPreset === 'vllm') && (
               <div className={styles.formGroup}>
                 <label className={styles.formLabel}>Base URL</label>
                 <input
@@ -964,18 +845,18 @@ export function ModelsSection(_props?: ModelsSectionProps) {
                 type="text"
                 value={selectedModelName}
                 onChange={e => setSelectedModelName(e.target.value)}
-                placeholder="e.g. gpt-4o, claude-3-5-sonnet-20241022, deepseek-reasoner"
+                placeholder="e.g. deepseek-reasoner, gpt-4o, claude-3-7-sonnet"
               />
             </div>
 
             <div className={styles.formGroup}>
-              <label className={styles.formLabel}>Max Output Tokens (Optional)</label>
+              <label className={styles.formLabel}>Max Tokens (Optional)</label>
               <input
                 className={styles.formInput}
                 type="number"
                 value={selectedMaxTokens}
                 onChange={e => setSelectedMaxTokens(e.target.value)}
-                placeholder="e.g. 4096 (leave empty for default)"
+                placeholder="e.g. 4096 (leave empty for model default)"
               />
             </div>
 
@@ -991,8 +872,8 @@ export function ModelsSection(_props?: ModelsSectionProps) {
         </Modal>
       )}
 
-      {/* Delete Provider Confirmation Modal */}
-      {Boolean(deletingProviderId) && (
+      {/* Confirm Delete Provider Modal */}
+      {deletingProviderId && (
         <Modal
           open={Boolean(deletingProviderId)}
           closeLabel="Close"
@@ -1000,14 +881,17 @@ export function ModelsSection(_props?: ModelsSectionProps) {
           onClose={() => setDeletingProviderId(null)}
         >
           <div className={styles.modalBody}>
-            <p style={{ margin: 0, fontSize: 13, lineHeight: '20px' }}>
-              Are you sure you want to delete this provider? Any models currently using this provider may stop functioning.
+            <p style={{ margin: 0, color: 'var(--dsw-alias-label-secondary)', fontSize: 13, lineHeight: '20px' }}>
+              Are you sure you want to delete this provider configuration? Any model referencing it will need to be reconfigured.
             </p>
             <div className={styles.modalActions}>
               <Button variant="ghost" onClick={() => setDeletingProviderId(null)}>
                 Cancel
               </Button>
-              <Button variant="outline" onClick={() => deletingProviderId && handleDeleteProvider(deletingProviderId)}>
+              <Button
+                variant="primary"
+                onClick={() => deletingProviderId && handleDeleteProvider(deletingProviderId)}
+              >
                 Delete Provider
               </Button>
             </div>
@@ -1017,3 +901,4 @@ export function ModelsSection(_props?: ModelsSectionProps) {
     </div>
   )
 }
+

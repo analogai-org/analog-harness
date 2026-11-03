@@ -95,8 +95,5 @@ export interface WelcomeAuthentication {
  * @returns true only when microservice has no models configured and neither authentication route is configured.
  */
 export function needsWelcome(authentication: WelcomeAuthentication): boolean {
-  if (authentication.hasMicroserviceModels) {
-    return false
-  }
-  return !authentication.loggedIn && !authentication.hasApiKey
+  return !authentication.hasMicroserviceModels
 }
