@@ -115,7 +115,7 @@ async function ensureAnalogChatBackend(): Promise<void> {
           env: {
             ...process.env,
             PORT: '8071',
-            ENVIRONMENT: process.env.ENVIRONMENT ?? 'development',
+            ...(process.env.ENVIRONMENT ? { ENVIRONMENT: process.env.ENVIRONMENT } : {}),
           },
           stdio: ['ignore', 'pipe', 'pipe'],
         })

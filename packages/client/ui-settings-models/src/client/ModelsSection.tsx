@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback, type ReactNode } from 'react'
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { en } from './locales.ts'
+import { en } from './locales.ts'
+import { ProviderModelPicker } from './ProviderModelPicker.tsx'
+import { providerDisplayLabel } from './provider-labels.ts'
 import styles from './ModelsSection.module.css'
 
 export interface ModelsSectionInjected {
@@ -46,13 +48,14 @@ interface ProviderPreset {
   name: string
   baseUrl: string
   keyHint: string
+  nameKey?: 'openAiApi' | 'anthropicApi'
 }
 
 const DEFAULT_PRESETS: ProviderPreset[] = [
   { id: 'openai_oauth', name: 'OpenAI Subscription (Codex)', baseUrl: 'https://api.openai.com/v1', keyHint: 'OAuth' },
   { id: 'anthropic_oauth', name: 'Anthropic Subscription (Claude Code)', baseUrl: 'https://api.anthropic.com/v1', keyHint: 'OAuth' },
-  { id: 'openai', name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', keyHint: 'sk-...' },
-  { id: 'anthropic', name: 'Anthropic', baseUrl: 'https://api.anthropic.com/v1', keyHint: 'sk-ant-...' },
+  { id: 'openai', name: 'OpenAI', nameKey: 'openAiApi', baseUrl: 'https://api.openai.com/v1', keyHint: 'sk-...' },
+  { id: 'anthropic', name: 'Anthropic', nameKey: 'anthropicApi', baseUrl: 'https://api.anthropic.com/v1', keyHint: 'sk-ant-...' },
   { id: 'ollama', name: 'Ollama (Local)', baseUrl: 'http://localhost:11434/v1', keyHint: 'None or ollama' },
   { id: 'gemini', name: 'Google Gemini', baseUrl: '', keyHint: 'AIzaSy...' },
   { id: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', keyHint: 'sk-...' },
@@ -72,11 +75,26 @@ const DEFAULT_PRESETS: ProviderPreset[] = [
 
 const CHAT_BASE_URL = 'http://localhost:8071'
 
+async function loadProviderModels(providerId: string, signal: AbortSignal): Promise<Array<{ id: string; name?: string }>> {
+  const response = await fetch(`${CHAT_BASE_URL}/v1/providers/${encodeURIComponent(providerId)}/models`, { signal })
+  if (!response.ok) throw new Error('Provider model listing failed')
+  const body: unknown = await response.json()
+  if (body === null || typeof body !== 'object' || !('data' in body) || !Array.isArray(body.data)) {
+    throw new Error('Invalid provider model listing')
+  }
+  return body.data.flatMap((item: unknown) => {
+    if (item === null || typeof item !== 'object' || !('id' in item) || typeof item.id !== 'string' || !item.id.trim()) return []
+    return [{ id: item.id, ...'name' in item && typeof item.name === 'string' ? { name: item.name } : {} }]
+  })
+}
+
 interface ProviderItem {
   id: string
   agent_id: string
   name: string
   display_name?: string
+  provider_type?: string
+  auth_type?: string
   base_url?: string
   api_key?: string
   has_key?: boolean
@@ -123,6 +141,8 @@ function AnthropicIcon({ style }: { style?: React.CSSProperties }) {
 }
 
 export function ModelsSection(_props?: ModelsSectionProps) {
+  const t = _props?.t ?? ((key: keyof typeof en) => en[key])
+  const presetLabel = (preset: ProviderPreset): string => preset.nameKey ? t(preset.nameKey) : preset.name
   const [_agents, setAgents] = useState<AgentItem[]>([])
   const [activeAgentId, setActiveAgentId] = useState<string>('default')
   const [providers, setProviders] = useState<ProviderItem[]>([])
@@ -311,7 +331,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
 
   const openEditProviderModal = (p: ProviderItem) => {
     setEditingProvider(p)
-    const isOAuthKey = p.api_key?.startsWith('oauth:')
+    const isOAuthKey = p.auth_type === 'subscription' || p.api_key?.startsWith('oauth:')
     let presetId = 'custom'
     if (isOAuthKey || p.name.toLowerCase().includes('codex') || p.display_name?.toLowerCase().includes('codex')) {
       if (p.name.toLowerCase().includes('openai') || p.display_name?.toLowerCase().includes('openai') || p.api_key?.includes('openai')) {
@@ -320,11 +340,11 @@ export function ModelsSection(_props?: ModelsSectionProps) {
         presetId = 'anthropic_oauth'
       }
     } else {
-      const match = presets.find(pr => pr.baseUrl === p.base_url || pr.name.toLowerCase() === p.name.toLowerCase() || pr.id === p.name.toLowerCase())
+      const match = presets.find(pr => !pr.id.endsWith('_oauth') && (pr.id === p.provider_type || pr.baseUrl === p.base_url || pr.name.toLowerCase() === p.name.toLowerCase() || pr.id === p.name.toLowerCase()))
       presetId = match ? match.id : (p.name.toLowerCase() === 'openai' ? 'openai' : p.name.toLowerCase() === 'anthropic' ? 'anthropic' : 'custom')
     }
     setProviderPreset(presetId)
-    setProviderName(p.display_name || p.name)
+    setProviderName(providerDisplayLabel(p, t))
     setProviderBaseUrl(p.base_url || '')
     setProviderApiKey(p.api_key || '')
     setProviderModalOpen(true)
@@ -335,7 +355,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
     const match = presets.find(p => p.id === presetId)
     if (match) {
       if (presetId !== 'custom') {
-        setProviderName(match.name)
+        setProviderName(presetLabel(match))
         setProviderBaseUrl(match.baseUrl)
       }
     }
@@ -373,9 +393,27 @@ export function ModelsSection(_props?: ModelsSectionProps) {
     try {
       setProviderSaving(true)
       setErrorMsg(null)
+
+      let providerType = 'openai'
+      if (providerPreset.startsWith('anthropic')) providerType = 'anthropic'
+      else if (providerPreset.startsWith('openai')) providerType = 'openai'
+      else if (providerPreset.startsWith('gemini')) providerType = 'gemini'
+      else if (providerPreset.startsWith('ollama')) providerType = 'ollama'
+      else if (providerPreset.startsWith('grok') || providerPreset.startsWith('xai')) providerType = 'xai'
+      else if (providerPreset.startsWith('openrouter')) providerType = 'openrouter'
+      else if (providerPreset.startsWith('mistral')) providerType = 'mistral'
+      else if (providerPreset.startsWith('together')) providerType = 'together_ai'
+      else if (providerPreset.startsWith('perplexity')) providerType = 'perplexity'
+      else if (providerPreset.startsWith('deepseek')) providerType = 'deepseek'
+      else providerType = providerPreset
+
+      const authType = isOAuth ? 'subscription' : (effectiveApiKey ? 'api_key' : 'none')
+
       const payload: Record<string, any> = {
         name: providerName.trim(),
         display_name: providerName.trim(),
+        provider_type: providerType,
+        auth_type: authType,
         base_url: isOAuth ? (providerPreset === 'openai_oauth' ? 'https://api.openai.com/v1' : 'https://api.anthropic.com/v1') : (providerBaseUrl.trim() || null),
         api_key: effectiveApiKey,
         agent_id: activeAgentId,
@@ -503,7 +541,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
   const getProviderName = (provId?: string) => {
     if (!provId) return 'None'
     const found = providers.find(p => p.id === provId)
-    return found ? (found.display_name || found.name) : 'Unknown'
+    return found ? providerDisplayLabel(found, t) : 'Unknown'
   }
 
   const isSelectedOAuth = providerPreset === 'openai_oauth' || providerPreset === 'anthropic_oauth'
@@ -550,11 +588,11 @@ export function ModelsSection(_props?: ModelsSectionProps) {
                 </tr>
               ) : (
                 providers.map(p => {
-                  const isOAuthKey = p.api_key?.startsWith('oauth:') || p.name.toLowerCase() === 'openai' || p.name.toLowerCase() === 'anthropic'
+                  const isOAuthKey = p.auth_type === 'subscription' || p.api_key?.startsWith('oauth:')
                   return (
                     <tr key={p.id}>
                       <td className={styles.td}>
-                        <strong>{p.display_name || p.name}</strong>
+                        <strong>{providerDisplayLabel(p, t)}</strong>
                       </td>
                       <td className={`${styles.td} ${styles.tdMonospace}`}>{p.base_url || '-'}</td>
                       <td className={`${styles.td} ${styles.tdMonospace}`}>
@@ -680,7 +718,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
               >
                 {presets.map(p => (
                   <option key={p.id} value={p.id}>
-                    {p.name}
+                    {presetLabel(p)}
                   </option>
                 ))}
               </select>
@@ -822,23 +860,20 @@ export function ModelsSection(_props?: ModelsSectionProps) {
                 ) : (
                   providers.map(p => (
                     <option key={p.id} value={p.id}>
-                      {p.display_name || p.name}
+                      {providerDisplayLabel(p, t)}
                     </option>
                   ))
                 )}
               </select>
             </div>
 
-            <div className={styles.formGroup}>
-              <label className={styles.formLabel}>Model Name / ID</label>
-              <input
-                className={styles.formInput}
-                type="text"
-                value={selectedModelName}
-                onChange={e => setSelectedModelName(e.target.value)}
-                placeholder="e.g. deepseek-reasoner, gpt-5.4-mini, claude-3-7-sonnet"
-              />
-            </div>
+            <ProviderModelPicker
+              providerId={selectedProviderId}
+              value={selectedModelName}
+              onChange={setSelectedModelName}
+              t={t}
+              loadModels={loadProviderModels}
+            />
 
             <div className={styles.formGroup}>
               <label className={styles.formLabel}>Max Tokens (Optional)</label>

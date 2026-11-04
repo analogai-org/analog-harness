@@ -37,75 +37,184 @@ function AnthropicIcon({ style }: { style?: React.CSSProperties }) {
 
 const CHAT_BASE_URL = 'http://localhost:8071'
 
+
+interface ModelOption {
+  id: string
+  name?: string
+}
+
+const PROVIDER_MODEL_CATALOG: Record<string, ModelOption[]> = {
+  openai: [
+    { id: 'o3-mini' },
+    { id: 'o1' },
+    { id: 'o1-mini' },
+    { id: 'gpt-4o' },
+    { id: 'gpt-4o-mini' },
+    { id: 'gpt-4-turbo' },
+    { id: 'gpt-3.5-turbo' },
+  ],
+  openai_oauth: [
+    { id: 'gpt-6-astra' },
+    { id: 'gpt-6.1-sol' },
+    { id: 'gpt-6-sol' },
+    { id: 'gpt-6.1-terra' },
+    { id: 'gpt-6-luna' },
+    { id: 'gpt-5.6-sol' },
+    { id: 'gpt-5.6-terra' },
+    { id: 'gpt-5.6-luna' },
+    { id: 'gpt-5.3-codex' },
+  ],
+  anthropic: [
+    { id: 'claude-3-7-sonnet-20250219' },
+    { id: 'claude-3-5-sonnet-20241022' },
+    { id: 'claude-3-5-haiku-20241022' },
+    { id: 'claude-3-opus-20240229' },
+  ],
+  anthropic_oauth: [
+    { id: 'claude-opus-5-5' },
+    { id: 'claude-sonnet-5-5' },
+    { id: 'claude-haiku-5-5' },
+    { id: 'claude-fable-5-1' },
+    { id: 'claude-opus-5' },
+    { id: 'claude-sonnet-5' },
+    { id: 'claude-fable-5' },
+    { id: 'claude-opus-4-8' },
+    { id: 'claude-opus-4-7' },
+    { id: 'claude-sonnet-4-6' },
+    { id: 'claude-opus-4-6' },
+    { id: 'claude-opus-4-5' },
+    { id: 'claude-sonnet-4-5' },
+    { id: 'claude-haiku-4-5' },
+  ],
+  deepseek: [
+    { id: 'deepseek-reasoner' },
+    { id: 'deepseek-chat' },
+  ],
+  gemini: [
+    { id: 'gemini-2.0-flash-thinking-exp' },
+    { id: 'gemini-2.0-flash' },
+    { id: 'gemini-2.0-pro-exp-02-05' },
+    { id: 'gemini-1.5-pro' },
+    { id: 'gemini-1.5-flash' },
+  ],
+  grok: [
+    { id: 'grok-2-mini' },
+    { id: 'grok-2-1212' },
+    { id: 'grok-beta' },
+  ],
+  xai: [
+    { id: 'grok-2-mini' },
+    { id: 'grok-2-1212' },
+  ],
+  ollama: [
+    { id: 'deepseek-r1:14b' },
+    { id: 'deepseek-r1:8b' },
+    { id: 'deepseek-r1:70b' },
+    { id: 'qwen2.5-coder:7b' },
+    { id: 'qwen2.5-coder:14b' },
+    { id: 'llama3.3:70b' },
+    { id: 'llama3.1:8b' },
+  ],
+  mistral: [
+    { id: 'mistral-large-latest' },
+    { id: 'mistral-small-latest' },
+    { id: 'codestral-latest' },
+    { id: 'ministral-8b-latest' },
+  ],
+  openrouter: [
+    { id: 'deepseek/deepseek-r1' },
+    { id: 'deepseek/deepseek-chat' },
+    { id: 'anthropic/claude-3.7-sonnet' },
+    { id: 'openai/o3-mini' },
+    { id: 'meta-llama/llama-3.3-70b-instruct' },
+    { id: 'google/gemini-2.0-flash-001' },
+  ],
+  together: [
+    { id: 'deepseek-ai/DeepSeek-R1' },
+    { id: 'deepseek-ai/DeepSeek-V3' },
+    { id: 'meta-llama/Llama-3.3-70B-Instruct-Turbo' },
+    { id: 'Qwen/Qwen2.5-Coder-32B-Instruct' },
+  ],
+  cerebras: [
+    { id: 'llama3.3-70b' },
+    { id: 'llama3.1-8b' },
+    { id: 'deepseek-r1-distill-llama-70b' },
+  ],
+  vllm: [
+    { id: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-14B' },
+    { id: 'Qwen/Qwen2.5-Coder-7B-Instruct' },
+  ],
+}
+
 const DEFAULT_WELCOME_PRESETS: Record<string, ProviderPreset> = {
   openai_oauth: {
     name: 'OpenAI Subscription (Codex)',
     baseUrl: 'https://api.openai.com/v1',
-    teacherModel: 'o3-mini',
-    studentModel: 'gpt-4o-mini',
+    teacherModel: '',
+    studentModel: '',
     keyRequired: false,
   },
   anthropic_oauth: {
     name: 'Anthropic Subscription (Claude Code)',
     baseUrl: 'https://api.anthropic.com/v1',
-    teacherModel: 'claude-3-7-sonnet-20250219',
-    studentModel: 'claude-3-5-haiku-20241022',
+    teacherModel: '',
+    studentModel: '',
     keyRequired: false,
   },
   openai: {
     name: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',
-    teacherModel: 'o3-mini',
-    studentModel: 'gpt-4o-mini',
+    teacherModel: '',
+    studentModel: '',
     keyRequired: true,
   },
   anthropic: {
     name: 'Anthropic',
     baseUrl: 'https://api.anthropic.com/v1',
-    teacherModel: 'claude-3-7-sonnet-20250219',
-    studentModel: 'claude-3-5-haiku-20241022',
+    teacherModel: '',
+    studentModel: '',
     keyRequired: true,
   },
   ollama: {
     name: 'Ollama (Local)',
     baseUrl: 'http://localhost:11434/v1',
-    teacherModel: 'deepseek-r1:14b',
-    studentModel: 'qwen2.5-coder:7b',
+    teacherModel: '',
+    studentModel: '',
     keyRequired: false,
   },
   gemini: {
     name: 'Google Gemini',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-    teacherModel: 'gemini-2.0-flash-thinking-exp',
-    studentModel: 'gemini-2.0-flash',
+    teacherModel: '',
+    studentModel: '',
     keyRequired: true,
   },
   deepseek: {
     name: 'DeepSeek',
     baseUrl: 'https://api.deepseek.com/v1',
-    teacherModel: 'deepseek-reasoner',
-    studentModel: 'deepseek-chat',
+    teacherModel: '',
+    studentModel: '',
     keyRequired: true,
   },
   grok: {
     name: 'xAI Grok',
     baseUrl: 'https://api.x.ai/v1',
-    teacherModel: 'grok-2-mini',
-    studentModel: 'grok-2-mini',
+    teacherModel: '',
+    studentModel: '',
     keyRequired: true,
   },
   openrouter: {
     name: 'OpenRouter',
     baseUrl: 'https://openrouter.ai/api/v1',
-    teacherModel: 'deepseek/deepseek-r1',
-    studentModel: 'meta-llama/llama-3.3-70b-instruct',
+    teacherModel: '',
+    studentModel: '',
     keyRequired: true,
   },
   vllm: {
     name: 'vLLM / Local OpenAI compatible',
     baseUrl: 'http://localhost:8000/v1',
-    teacherModel: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-14B',
-    studentModel: 'Qwen/Qwen2.5-Coder-7B-Instruct',
+    teacherModel: '',
+    studentModel: '',
     keyRequired: false,
   },
   custom: {
@@ -126,8 +235,8 @@ export function Welcome({ api }: { api: WelcomeApi }) {
   const [providerType, setProviderType] = useState('openai_oauth')
   const [apiKey, setApiKey] = useState('')
   const [baseUrl, setBaseUrl] = useState(DEFAULT_WELCOME_PRESETS.openai_oauth?.baseUrl || '')
-  const [teacherModel, setTeacherModel] = useState(DEFAULT_WELCOME_PRESETS.openai_oauth?.teacherModel || '')
-  const [studentModel, setStudentModel] = useState(DEFAULT_WELCOME_PRESETS.openai_oauth?.studentModel || '')
+  const [teacherModel, setTeacherModel] = useState('')
+  const [studentModel, setStudentModel] = useState('')
 
   // OAuth statuses
   const [openAIAuth, setOpenAIAuth] = useState<OAuthStatus | null>(null)
@@ -234,8 +343,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
     const preset = providers[type]
     if (preset) {
       setBaseUrl(preset.baseUrl)
-      if (preset.teacherModel) setTeacherModel(preset.teacherModel)
-      if (preset.studentModel) setStudentModel(preset.studentModel)
+      
     }
     setError('')
     if (type === 'openai_oauth' || type === 'anthropic_oauth' || type === 'openai' || type === 'anthropic') {
@@ -352,6 +460,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
   }
 
   const selectedPreset = providers[providerType]
+  const availableModels = PROVIDER_MODEL_CATALOG[providerType] ?? []
   const isOpenAIOAuth = providerType === 'openai_oauth'
   const isAnthropicOAuth = providerType === 'anthropic_oauth'
   const isOAuthProvider = isOpenAIOAuth || isAnthropicOAuth
@@ -579,33 +688,77 @@ export function Welcome({ api }: { api: WelcomeApi }) {
 
               <div className="key-field">
                 <label htmlFor="teacher-model-input">Teacher Model (Reasoning)</label>
-                <input
-                  id="teacher-model-input"
-                  type="text"
-                  placeholder="e.g. deepseek-reasoner"
-                  value={teacherModel}
-                  disabled={busy}
-                  onChange={(e) => {
-                    setTeacherModel(e.target.value)
-                    setError('')
-                  }}
-                  autoFocus
-                />
+                <div style={{ display: 'grid', gridTemplateColumns: availableModels.length > 0 ? '1fr 1fr' : '1fr', gap: '8px' }}>
+                  {availableModels.length > 0 && (
+                    <select
+                      id="teacher-model-select"
+                      value={availableModels.some(m => m.id === teacherModel) ? teacherModel : ''}
+                      disabled={busy}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setTeacherModel(e.target.value)
+                          setError('')
+                        }
+                      }}
+                    >
+                      <option value="">Choose preset…</option>
+                      {availableModels.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.id}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <input
+                    id="teacher-model-input"
+                    type="text"
+                    placeholder="e.g. gpt-6-astra"
+                    value={teacherModel}
+                    disabled={busy}
+                    onChange={(e) => {
+                      setTeacherModel(e.target.value)
+                      setError('')
+                    }}
+                    autoFocus
+                  />
+                </div>
               </div>
 
               <div className="key-field">
                 <label htmlFor="student-model-input">Student Model (Fast Executor)</label>
-                <input
-                  id="student-model-input"
-                  type="text"
-                  placeholder="e.g. deepseek-chat"
-                  value={studentModel}
-                  disabled={busy}
-                  onChange={(e) => {
-                    setStudentModel(e.target.value)
-                    setError('')
-                  }}
-                />
+                <div style={{ display: 'grid', gridTemplateColumns: availableModels.length > 0 ? '1fr 1fr' : '1fr', gap: '8px' }}>
+                  {availableModels.length > 0 && (
+                    <select
+                      id="student-model-select"
+                      value={availableModels.some(m => m.id === studentModel) ? studentModel : ''}
+                      disabled={busy}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setStudentModel(e.target.value)
+                          setError('')
+                        }
+                      }}
+                    >
+                      <option value="">Choose preset…</option>
+                      {availableModels.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.id}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <input
+                    id="student-model-input"
+                    type="text"
+                    placeholder="e.g. gpt-6.1-sol"
+                    value={studentModel}
+                    disabled={busy}
+                    onChange={(e) => {
+                      setStudentModel(e.target.value)
+                      setError('')
+                    }}
+                  />
+                </div>
               </div>
 
               {error && (

@@ -29,6 +29,8 @@ Desktop product events use the optional [product analytics service](../product-a
 
 Saving credentials or a custom provider preserves the selected model. The user can select an available model from the composer.
 
+The model editor shows the selected provider's model list beside an editable **Model ID** field. Choosing a model copies its ID into the field; users can also type a custom ID. Loading, empty, or failed model listings keep the field editable. API-key connections use the labels **OpenAI API** and **Anthropic API**; subscription connections retain their existing names and sign-in flows.
+
 DeepSeek Account appears first and DeepSeek second in the provider list; third-party providers retain their directory order.
 
 Open the Models page from the Settings navigation to see every configured provider as a row. A whole-section provider whose key is not configured anywhere renders as its open setup card instead, but only in the first-run posture and only until the user closes that card. Each card kind owns its own open state, so closing one never discards a draft in another.

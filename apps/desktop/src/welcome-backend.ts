@@ -208,11 +208,16 @@ export async function connectDesktopWelcome(
         let providerId = ''
         const existingProvidersRes = await fetch(`${localChatUrl}/v1/providers`).catch(() => null)
         if (existingProvidersRes && existingProvidersRes.ok) {
-          const existingProviders = (await existingProvidersRes.json()) as Array<{ id: string; name: string }>
+          const existingProviders = (await existingProvidersRes.json()) as Array<{ id: string; name: string; provider_type?: string; auth_type?: string }>
+          const targetType = params.providerType?.toLowerCase() || ''
+          const isSubscription = params.providerApiKey?.startsWith('oauth:')
+          const targetAuth = isSubscription ? 'subscription' : 'api_key'
+
           const found = existingProviders.find(
-            p => p.name?.toLowerCase() === params.providerType?.toLowerCase() ||
-                 (params.providerType === 'openai' && p.name?.toLowerCase().includes('openai')) ||
-                 (params.providerType === 'anthropic' && p.name?.toLowerCase().includes('anthropic'))
+            p => (p.provider_type === targetType && (p.auth_type === targetAuth || !p.auth_type)) ||
+                 (p.name?.toLowerCase() === targetType) ||
+                 (targetType === 'openai' && p.name?.toLowerCase().includes('openai')) ||
+                 (targetType === 'anthropic' && p.name?.toLowerCase().includes('anthropic'))
           )
           if (found) {
             providerId = found.id
@@ -225,6 +230,9 @@ export async function connectDesktopWelcome(
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               name: params.providerType,
+              display_name: params.providerType,
+              provider_type: params.providerType,
+              auth_type: params.providerApiKey?.startsWith('oauth:') ? 'subscription' : 'api_key',
               api_key: params.providerApiKey,
               base_url: params.providerBaseUrl || undefined,
             }),

@@ -452,3 +452,21 @@
   color: var(--dsw-alias-state-error-primary);
   font-size: 13px;
 }
+
+.providerModelPicker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  gap: 12px;
+}
+
+.providerModelPicker > label {
+  min-width: 0;
+}
+
+.providerModelCatalogStatus {
+  min-height: 15px;
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--dsw-alias-label-secondary);
+}

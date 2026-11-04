@@ -1,0 +1,677 @@
+import { useEffect, useState, useCallback, type ReactNode } from 'react'
+import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { en } from './locales.ts'
+import styles from './ModelsSection.module.css'
+
+export interface ModelsSectionInjected {
+  controller: any
+  hooks: any
+  operations: any
+  schema: any
+  t: (key: keyof typeof en, params?: any) => string
+}
+
+export type ModelsSectionProps = Partial<ModelsSectionInjected> & {
+  useSnapshot?: any
+  renderSlot?: ((name: string, props?: any) => ReactNode) | undefined
+}
+
+export interface ProviderIdentity {
+  provider: string
+  displayName: string
+}
+
+export function needsSetup(_row: any, anyUsable: boolean): boolean {
+  return !anyUsable
+}
+
+export function providerTargetLabel(target: ProviderIdentity): string {
+  return target.displayName
+}
+
+export function providerCopy(template: string, target: ProviderIdentity): string {
+  return template.replace(/\{provider\}/g, target.displayName)
+}
+
+export async function removeProviderProfile(
+  _operations: any,
+  _controller: any,
+  _target: { settingsNs?: string; settingsPath?: readonly string[]; credentialRef?: string },
+): Promise<string | undefined> {
+  return undefined
+}
+
+interface ProviderPreset {
+  id: string
+  name: string
+  baseUrl: string
+  keyHint: string
+}
+
+const PRESETS: ProviderPreset[] = [
+  { id: 'openai', name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', keyHint: 'sk-...' },
+  { id: 'anthropic', name: 'Anthropic', baseUrl: 'https://api.anthropic.com/v1', keyHint: 'sk-ant-...' },
+  { id: 'gemini', name: 'Google Gemini', baseUrl: '', keyHint: 'AIzaSy...' },
+  { id: 'deepseek', name: 'DeepSeek', baseUrl: '', keyHint: 'sk-...' },
+  { id: 'grok', name: 'Grok (xAI)', baseUrl: 'https://api.x.ai/v1', keyHint: 'xai-...' },
+  { id: 'mistral', name: 'Mistral AI', baseUrl: '', keyHint: '...' },
+  { id: 'together', name: 'Together AI', baseUrl: '', keyHint: '...' },
+  { id: 'openrouter', name: 'OpenRouter', baseUrl: '', keyHint: 'sk-or-...' },
+  { id: 'perplexity', name: 'Perplexity', baseUrl: '', keyHint: 'pplx-...' },
+  { id: 'cohere', name: 'Cohere', baseUrl: '', keyHint: '...' },
+  { id: 'fireworks', name: 'Fireworks AI', baseUrl: '', keyHint: 'fw_...' },
+  { id: 'xai', name: 'xAI (Grok)', baseUrl: '', keyHint: 'xai-...' },
+  { id: 'cerebras', name: 'Cerebras', baseUrl: '', keyHint: 'csk-...' },
+  { id: 'sambanova', name: 'SambaNova', baseUrl: '', keyHint: '...' },
+  { id: 'ollama', name: 'Ollama (Local)', baseUrl: 'http://localhost:11434/v1', keyHint: 'None or ollama' },
+  { id: 'vllm', name: 'vLLM / Local Server', baseUrl: 'http://localhost:8000/v1', keyHint: 'None or token' },
+  { id: 'custom', name: 'Custom OpenAI-Compatible', baseUrl: '', keyHint: '...' },
+]
+
+const CHAT_BASE_URL = 'http://localhost:8071'
+
+interface ProviderItem {
+  id: string
+  agent_id: string
+  name: string
+  display_name?: string
+  base_url?: string
+  api_key?: string
+  has_key?: boolean
+}
+
+interface ModelItem {
+  id: string
+  agent_id: string
+  type?: 'reasoning' | 'fast' | string
+  model_type?: 'reasoning' | 'fast' | string
+  name?: string
+  model_name?: string
+  provider_id: string
+  max_tokens?: number | null
+  max_output_tokens?: number | null
+}
+
+interface AgentItem {
+  id: string
+  name: string
+}
+
+export function ModelsSection(_props?: ModelsSectionProps) {
+  const [_agents, setAgents] = useState<AgentItem[]>([])
+  const [activeAgentId, setActiveAgentId] = useState<string>('default')
+  const [providers, setProviders] = useState<ProviderItem[]>([])
+  const [models, setModels] = useState<ModelItem[]>([])
+  const [loading, setLoading] = useState<boolean>(true)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  // Provider Modal state
+  const [providerModalOpen, setProviderModalOpen] = useState<boolean>(false)
+  const [editingProvider, setEditingProvider] = useState<ProviderItem | null>(null)
+  const [providerPreset, setProviderPreset] = useState<string>('deepseek')
+  const [providerName, setProviderName] = useState<string>('DeepSeek')
+  const [providerBaseUrl, setProviderBaseUrl] = useState<string>('https://api.deepseek.com/v1')
+  const [providerApiKey, setProviderApiKey] = useState<string>('')
+  const [providerSaving, setProviderSaving] = useState<boolean>(false)
+
+  // Model Modal state
+  const [modelModalOpen, setModelModalOpen] = useState<boolean>(false)
+  const [editingModelType, setEditingModelType] = useState<'reasoning' | 'fast'>('reasoning')
+  const [selectedProviderId, setSelectedProviderId] = useState<string>('')
+  const [selectedModelName, setSelectedModelName] = useState<string>('')
+  const [selectedMaxTokens, setSelectedMaxTokens] = useState<string>('')
+  const [modelSaving, setModelSaving] = useState<boolean>(false)
+
+  // Delete Provider confirm modal
+  const [deletingProviderId, setDeletingProviderId] = useState<string | null>(null)
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true)
+      setErrorMsg(null)
+
+      // 1. Fetch agents
+      let currentAgentId = activeAgentId
+      const agentRes = await fetch(`${CHAT_BASE_URL}/v1/agents`)
+      if (agentRes.ok) {
+        const agentData = await agentRes.json()
+        const agentList = Array.isArray(agentData) ? agentData : agentData.agents || []
+        if (agentList.length > 0) {
+          setAgents(agentList)
+          if (!agentList.some((a: AgentItem) => a.id === currentAgentId)) {
+            currentAgentId = agentList[0].id
+            setActiveAgentId(currentAgentId)
+          }
+        }
+      }
+
+      // 2. Fetch providers for active agent
+      let loadedProviders: ProviderItem[] = []
+      const provRes = await fetch(`${CHAT_BASE_URL}/v1/agents/${currentAgentId}/providers`)
+      if (provRes.ok) {
+        const provData = await provRes.json()
+        loadedProviders = Array.isArray(provData) ? provData : provData.providers || []
+        setProviders(loadedProviders)
+      }
+
+      // 3. Fetch models for active agent
+      let loadedModels: ModelItem[] = []
+      const modRes = await fetch(`${CHAT_BASE_URL}/v1/agents/${currentAgentId}/models`)
+      if (modRes.ok) {
+        const modData = await modRes.json()
+        loadedModels = Array.isArray(modData) ? modData : modData.models || []
+        setModels(loadedModels)
+      }
+
+      // Sync to localStorage and notify other UI components
+      try {
+        const configuredList: Array<{ id: string; name: string; provider: string; category?: string }> = []
+        for (const m of loadedModels) {
+          const p = loadedProviders.find(pr => pr.id === m.provider_id)
+          const pName = p ? (p.display_name || p.name) : (m.provider_id || 'custom')
+          const mName = m.name || m.model_name || m.id
+          if (mName && mName !== 'Not Configured') {
+            configuredList.push({
+              id: m.id || mName,
+              name: mName,
+              provider: pName.toLowerCase(),
+              category: m.type || m.model_type || 'default',
+            })
+          }
+        }
+        localStorage.setItem('analog_configured_models', JSON.stringify(configuredList))
+        window.dispatchEvent(new CustomEvent('analog-models-updated'))
+      } catch {
+        // ignore
+      }
+    } catch (err: any) {
+      setErrorMsg(`Could not connect to Chat backend at ${CHAT_BASE_URL}. Ensure chat service is running.`)
+    } finally {
+      setLoading(false)
+    }
+  }, [activeAgentId])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  // --- Provider Modal Actions ---
+  const openAddProviderModal = () => {
+    setEditingProvider(null)
+    setProviderPreset('openai')
+    setProviderName('OpenAI')
+    setProviderBaseUrl('https://api.openai.com/v1')
+    setProviderApiKey('')
+    setProviderModalOpen(true)
+  }
+
+  const openEditProviderModal = (p: ProviderItem) => {
+    setEditingProvider(p)
+    const match = PRESETS.find(pr => pr.baseUrl === p.base_url || pr.name.toLowerCase() === p.name.toLowerCase())
+    setProviderPreset(match ? match.id : 'custom')
+    setProviderName(p.display_name || p.name)
+    setProviderBaseUrl(p.base_url || '')
+    setProviderApiKey(p.api_key || '')
+    setProviderModalOpen(true)
+  }
+
+  const handlePresetChange = (presetId: string) => {
+    setProviderPreset(presetId)
+    const match = PRESETS.find(p => p.id === presetId)
+    if (match) {
+      if (presetId !== 'custom') {
+        setProviderName(match.name)
+        setProviderBaseUrl(match.baseUrl)
+      }
+    }
+  }
+
+  const handleSaveProvider = async () => {
+    if (!providerName.trim()) return
+    try {
+      setProviderSaving(true)
+      setErrorMsg(null)
+      const payload: Record<string, any> = {
+        name: providerName.trim(),
+        display_name: providerName.trim(),
+        base_url: providerBaseUrl.trim() || null,
+        api_key: providerApiKey.trim(),
+        agent_id: activeAgentId,
+      }
+
+      let res: Response
+      if (editingProvider) {
+        res = await fetch(`${CHAT_BASE_URL}/v1/agents/${activeAgentId}/providers/${editingProvider.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      } else {
+        res = await fetch(`${CHAT_BASE_URL}/v1/agents/${activeAgentId}/providers`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      }
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setErrorMsg(data.detail || 'Failed to save provider.')
+        return
+      }
+
+      setProviderModalOpen(false)
+      await loadData()
+    } catch (err: any) {
+      setErrorMsg('Failed to save provider: ' + (err?.message || 'Network error'))
+    } finally {
+      setProviderSaving(false)
+    }
+  }
+
+  const handleDeleteProvider = async (providerId: string) => {
+    try {
+      setErrorMsg(null)
+      const res = await fetch(`${CHAT_BASE_URL}/v1/agents/${activeAgentId}/providers/${providerId}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setErrorMsg(data.detail || 'Failed to delete provider.')
+        return
+      }
+      setDeletingProviderId(null)
+      await loadData()
+    } catch (err: any) {
+      setErrorMsg('Failed to delete provider: ' + (err?.message || 'Network error'))
+    }
+  }
+
+  // --- Model Modal Actions ---
+  const getModelType = (m: ModelItem) => m.type || m.model_type || ''
+  const getModelName = (m?: ModelItem) => m?.name || m?.model_name || 'Not Configured'
+  const getModelMaxTokens = (m?: ModelItem) => m?.max_tokens ?? m?.max_output_tokens ?? null
+
+  const openEditModelModal = (modelType: 'reasoning' | 'fast') => {
+    setEditingModelType(modelType)
+    const existing = models.find(m => getModelType(m) === modelType)
+    if (existing) {
+      setSelectedProviderId(existing.provider_id || (providers[0]?.id || ''))
+      setSelectedModelName(existing.name || existing.model_name || '')
+      const maxTok = getModelMaxTokens(existing)
+      setSelectedMaxTokens(maxTok ? String(maxTok) : '')
+    } else {
+      setSelectedProviderId(providers[0]?.id || '')
+      setSelectedModelName('')
+      setSelectedMaxTokens('')
+    }
+    setModelModalOpen(true)
+  }
+
+  const handleSaveModel = async () => {
+    if (!selectedModelName.trim()) return
+    try {
+      setModelSaving(true)
+      setErrorMsg(null)
+      const existing = models.find(m => getModelType(m) === editingModelType)
+      const maxTokens = selectedMaxTokens.trim() ? parseInt(selectedMaxTokens.trim(), 10) : null
+      const payload: Record<string, any> = {
+        type: editingModelType,
+        model_type: editingModelType,
+        name: selectedModelName.trim(),
+        model_name: selectedModelName.trim(),
+        provider_id: selectedProviderId,
+        max_tokens: maxTokens,
+        max_output_tokens: maxTokens,
+        agent_id: activeAgentId,
+      }
+
+      let res: Response
+      if (existing) {
+        res = await fetch(`${CHAT_BASE_URL}/v1/agents/${activeAgentId}/models/${existing.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      } else {
+        res = await fetch(`${CHAT_BASE_URL}/v1/agents/${activeAgentId}/models`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      }
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setErrorMsg(data.detail || 'Failed to save model configuration.')
+        return
+      }
+
+      setModelModalOpen(false)
+      await loadData()
+    } catch (err: any) {
+      setErrorMsg('Failed to save model: ' + (err?.message || 'Network error'))
+    } finally {
+      setModelSaving(false)
+    }
+  }
+
+  const reasoningModel = models.find(m => getModelType(m) === 'reasoning')
+  const fastModel = models.find(m => getModelType(m) === 'fast')
+  const getProviderName = (provId?: string) => {
+    if (!provId) return 'None'
+    const found = providers.find(p => p.id === provId)
+    return found ? (found.display_name || found.name) : 'Unknown'
+  }
+
+  return (
+    <div className={styles.section}>
+      {/* Header */}
+      <div className={styles.pageHeader}>
+        <h2 className={styles.pageTitle}>Models & Providers</h2>
+        <p className={styles.pageSubtitle}>
+          Configure AI providers, API keys, and assign reasoning and fast models.
+        </p>
+      </div>
+
+      {errorMsg && (
+        <div className={styles.diagnosticBanner}>
+          {errorMsg}
+        </div>
+      )}
+
+      {/* Section 2: Providers Table */}
+      <div className={styles.sectionBlock}>
+        <div className={styles.sectionHeaderWithSubtitle}>
+          <h3 className={styles.sectionTitle}>Configured Providers</h3>
+          <p className={styles.sectionSubtitle}>Active endpoint connections and API keys for this agent.</p>
+        </div>
+
+        <div className={styles.tableCard}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th className={styles.th}>Name</th>
+                <th className={styles.th}>Base URL</th>
+                <th className={styles.th}>Authentication</th>
+                <th className={styles.th} style={{ textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {providers.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className={styles.emptyState}>
+                    {loading ? 'Loading providers...' : 'No providers configured yet. Click "+ Add Provider" below.'}
+                  </td>
+                </tr>
+              ) : (
+                providers.map(p => {
+                  return (
+                    <tr key={p.id}>
+                      <td className={styles.td}>
+                        <strong>{p.display_name || p.name}</strong>
+                      </td>
+                      <td className={`${styles.td} ${styles.tdMonospace}`}>{p.base_url || '-'}</td>
+                      <td className={`${styles.td} ${styles.tdMonospace}`}>
+                        {p.api_key ? '••••••••••••••••' : '(None / Local)'}
+                      </td>
+                      <td className={`${styles.td} ${styles.actionsCell}`}>
+                        <div className={styles.actionButtonGroup}>
+                          <Button
+                            variant="outline"
+                            onClick={() => openEditProviderModal(p)}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            className={styles.deleteButton}
+                            onClick={() => setDeletingProviderId(p.id)}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <Button variant="primary" className={styles.addProviderBtn} onClick={openAddProviderModal}>
+          + Add Provider
+        </Button>
+      </div>
+
+      {/* Section 3: Models Configuration */}
+      <div className={styles.sectionBlock}>
+        <div className={styles.sectionHeaderWithSubtitle}>
+          <h3 className={styles.sectionTitle}>Models</h3>
+          <p className={styles.sectionSubtitle}>Assign models and tokens for deep reasoning and fast interactive replies.</p>
+        </div>
+
+        <div className={styles.modelsGrid}>
+          {/* Reasoning Model Card */}
+          <div className={styles.modelCard}>
+            <div className={styles.cardHeader}>
+              <span className={styles.badge}>Reasoning Model</span>
+              <Button
+                variant="outline"
+                onClick={() => openEditModelModal('reasoning')}
+              >
+                Edit
+              </Button>
+            </div>
+            <div className={styles.modelVal}>
+              {getModelName(reasoningModel)}
+            </div>
+            <div className={styles.modelProv}>
+              Provider: <strong>{getProviderName(reasoningModel?.provider_id)}</strong>
+            </div>
+            {getModelMaxTokens(reasoningModel) && (
+              <div className={styles.modelMaxTokens}>
+                Max tokens: {getModelMaxTokens(reasoningModel)}
+              </div>
+            )}
+            <div className={styles.cardDesc}>
+              Used for complex tasks, architectural decisions, code planning, and multi-step tool reasoning.
+            </div>
+          </div>
+
+          {/* Fast Model Card */}
+          <div className={styles.modelCard}>
+            <div className={styles.cardHeader}>
+              <span className={styles.badge}>Fast Model</span>
+              <Button
+                variant="outline"
+                onClick={() => openEditModelModal('fast')}
+              >
+                Edit
+              </Button>
+            </div>
+            <div className={styles.modelVal}>
+              {getModelName(fastModel)}
+            </div>
+            <div className={styles.modelProv}>
+              Provider: <strong>{getProviderName(fastModel?.provider_id)}</strong>
+            </div>
+            {getModelMaxTokens(fastModel) && (
+              <div className={styles.modelMaxTokens}>
+                Max tokens: {getModelMaxTokens(fastModel)}
+              </div>
+            )}
+            <div className={styles.cardDesc}>
+              Used for quick responses, titles, summarization, and lightweight conversational turns.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Add / Edit Provider Modal */}
+      {providerModalOpen && (
+        <Modal
+          open={providerModalOpen}
+          closeLabel="Close"
+          title={editingProvider ? 'Edit Provider' : 'Add Provider'}
+          onClose={() => setProviderModalOpen(false)}
+        >
+          <div className={styles.modalBody}>
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>Provider Preset</label>
+              <select
+                className={styles.formSelect}
+                value={providerPreset}
+                onChange={e => handlePresetChange(e.target.value)}
+              >
+                {PRESETS.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>Display Name</label>
+              <input
+                className={styles.formInput}
+                type="text"
+                value={providerName}
+                onChange={e => setProviderName(e.target.value)}
+                placeholder="e.g. OpenAI, Anthropic, My Local LLM"
+              />
+            </div>
+
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>
+                {providerPreset === 'ollama' || providerPreset === 'vllm' ? 'API Key (Not required for local servers)' : 'API Key'}
+              </label>
+              <input
+                className={styles.formInput}
+                type="password"
+                value={providerApiKey}
+                onChange={e => setProviderApiKey(e.target.value)}
+                placeholder={PRESETS.find(p => p.id === providerPreset)?.keyHint || 'sk-...'}
+              />
+              <span className={styles.formHelp}>
+                {providerPreset === 'ollama' || providerPreset === 'vllm'
+                  ? 'Local endpoints do not require an API key unless configured with one.'
+                  : 'Your API key is securely saved directly in your Chat backend.'}
+              </span>
+            </div>
+
+            {(providerPreset === 'custom' || providerPreset === 'ollama' || providerPreset === 'vllm') && (
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Base URL</label>
+                <input
+                  className={styles.formInput}
+                  type="text"
+                  value={providerBaseUrl}
+                  onChange={e => setProviderBaseUrl(e.target.value)}
+                  placeholder={providerPreset === 'ollama' ? 'http://localhost:11434/v1' : 'https://...'}
+                />
+              </div>
+            )}
+
+            <div className={styles.modalActions}>
+              <Button variant="ghost" onClick={() => setProviderModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={handleSaveProvider} disabled={providerSaving}>
+                {providerSaving ? 'Saving...' : 'Save Provider'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Edit Model Modal */}
+      {modelModalOpen && (
+        <Modal
+          open={modelModalOpen}
+          closeLabel="Close"
+          title={`Edit ${editingModelType === 'reasoning' ? 'Reasoning' : 'Fast'} Model`}
+          onClose={() => setModelModalOpen(false)}
+        >
+          <div className={styles.modalBody}>
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>Provider</label>
+              <select
+                className={styles.formSelect}
+                value={selectedProviderId}
+                onChange={e => setSelectedProviderId(e.target.value)}
+              >
+                {providers.length === 0 ? (
+                  <option value="">No providers available</option>
+                ) : (
+                  providers.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.display_name || p.name}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>Model Name / ID</label>
+              <input
+                className={styles.formInput}
+                type="text"
+                value={selectedModelName}
+                onChange={e => setSelectedModelName(e.target.value)}
+                placeholder="e.g. gpt-4o, claude-3-5-sonnet-20241022, deepseek-reasoner"
+              />
+            </div>
+
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>Max Output Tokens (Optional)</label>
+              <input
+                className={styles.formInput}
+                type="number"
+                value={selectedMaxTokens}
+                onChange={e => setSelectedMaxTokens(e.target.value)}
+                placeholder="e.g. 4096 (leave empty for default)"
+              />
+            </div>
+
+            <div className={styles.modalActions}>
+              <Button variant="ghost" onClick={() => setModelModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={handleSaveModel} disabled={modelSaving}>
+                {modelSaving ? 'Saving...' : 'Save Model'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete Provider Confirmation Modal */}
+      {Boolean(deletingProviderId) && (
+        <Modal
+          open={Boolean(deletingProviderId)}
+          closeLabel="Close"
+          title="Delete Provider"
+          onClose={() => setDeletingProviderId(null)}
+        >
+          <div className={styles.modalBody}>
+            <p style={{ margin: 0, fontSize: 13, lineHeight: '20px' }}>
+              Are you sure you want to delete this provider? Any models currently using this provider may stop functioning.
+            </p>
+            <div className={styles.modalActions}>
+              <Button variant="ghost" onClick={() => setDeletingProviderId(null)}>
+                Cancel
+              </Button>
+              <Button variant="outline" onClick={() => deletingProviderId && handleDeleteProvider(deletingProviderId)}>
+                Delete Provider
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  )
+}
