@@ -37,20 +37,97 @@ function AnthropicIcon({ style }: { style?: React.CSSProperties }) {
 
 const CHAT_BASE_URL = 'http://localhost:8071'
 
+const DEFAULT_WELCOME_PRESETS: Record<string, ProviderPreset> = {
+  openai_oauth: {
+    name: 'OpenAI Subscription (Codex)',
+    baseUrl: 'https://api.openai.com/v1',
+    teacherModel: 'o3-mini',
+    studentModel: 'gpt-4o-mini',
+    keyRequired: false,
+  },
+  anthropic_oauth: {
+    name: 'Anthropic Subscription (Claude Code)',
+    baseUrl: 'https://api.anthropic.com/v1',
+    teacherModel: 'claude-3-7-sonnet-20250219',
+    studentModel: 'claude-3-5-haiku-20241022',
+    keyRequired: false,
+  },
+  openai: {
+    name: 'OpenAI',
+    baseUrl: 'https://api.openai.com/v1',
+    teacherModel: 'o3-mini',
+    studentModel: 'gpt-4o-mini',
+    keyRequired: true,
+  },
+  anthropic: {
+    name: 'Anthropic',
+    baseUrl: 'https://api.anthropic.com/v1',
+    teacherModel: 'claude-3-7-sonnet-20250219',
+    studentModel: 'claude-3-5-haiku-20241022',
+    keyRequired: true,
+  },
+  ollama: {
+    name: 'Ollama (Local)',
+    baseUrl: 'http://localhost:11434/v1',
+    teacherModel: 'deepseek-r1:14b',
+    studentModel: 'qwen2.5-coder:7b',
+    keyRequired: false,
+  },
+  gemini: {
+    name: 'Google Gemini',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    teacherModel: 'gemini-2.0-flash-thinking-exp',
+    studentModel: 'gemini-2.0-flash',
+    keyRequired: true,
+  },
+  deepseek: {
+    name: 'DeepSeek',
+    baseUrl: 'https://api.deepseek.com/v1',
+    teacherModel: 'deepseek-reasoner',
+    studentModel: 'deepseek-chat',
+    keyRequired: true,
+  },
+  grok: {
+    name: 'xAI Grok',
+    baseUrl: 'https://api.x.ai/v1',
+    teacherModel: 'grok-2-mini',
+    studentModel: 'grok-2-mini',
+    keyRequired: true,
+  },
+  openrouter: {
+    name: 'OpenRouter',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    teacherModel: 'deepseek/deepseek-r1',
+    studentModel: 'meta-llama/llama-3.3-70b-instruct',
+    keyRequired: true,
+  },
+  vllm: {
+    name: 'vLLM / Local OpenAI compatible',
+    baseUrl: 'http://localhost:8000/v1',
+    teacherModel: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-14B',
+    studentModel: 'Qwen/Qwen2.5-Coder-7B-Instruct',
+    keyRequired: false,
+  },
+  custom: {
+    name: 'Custom Provider',
+    baseUrl: '',
+    teacherModel: '',
+    studentModel: '',
+    keyRequired: false,
+  },
+}
+
 export function Welcome({ api }: { api: WelcomeApi }) {
   // Step 0: Welcome overview with "Start Configuration" button
   // Step 1: Add Providers
   // Step 2: Add Teacher & Student models
   const [step, setStep] = useState<0 | 1 | 2>(0)
-  const [providers, setProviders] = useState<Record<string, ProviderPreset>>({})
-  const [loadingProviders, setLoadingProviders] = useState(true)
-  const [serviceError, setServiceError] = useState('')
-
-  const [providerType, setProviderType] = useState('')
+  const providers = DEFAULT_WELCOME_PRESETS
+  const [providerType, setProviderType] = useState('openai_oauth')
   const [apiKey, setApiKey] = useState('')
-  const [baseUrl, setBaseUrl] = useState('')
-  const [teacherModel, setTeacherModel] = useState('')
-  const [studentModel, setStudentModel] = useState('')
+  const [baseUrl, setBaseUrl] = useState(DEFAULT_WELCOME_PRESETS.openai_oauth?.baseUrl || '')
+  const [teacherModel, setTeacherModel] = useState(DEFAULT_WELCOME_PRESETS.openai_oauth?.teacherModel || '')
+  const [studentModel, setStudentModel] = useState(DEFAULT_WELCOME_PRESETS.openai_oauth?.studentModel || '')
 
   // OAuth statuses
   const [openAIAuth, setOpenAIAuth] = useState<OAuthStatus | null>(null)
@@ -61,8 +138,6 @@ export function Welcome({ api }: { api: WelcomeApi }) {
   const [statusMessage, setStatusMessage] = useState('')
   const [error, setError] = useState('')
   const mounted = useRef(true)
-  const retryCount = useRef(0)
-  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const checkAuthStatuses = async () => {
     try {
@@ -93,73 +168,11 @@ export function Welcome({ api }: { api: WelcomeApi }) {
     }
   }
 
-  const fetchProviders = async () => {
-    try {
-      let res = await fetch(`${CHAT_BASE_URL}/available-providers`, {
-        signal: AbortSignal.timeout(3000),
-      }).catch(() => null)
-      if (!res || !res.ok) {
-        res = await fetch(`${CHAT_BASE_URL}/v1/available-providers`, {
-          signal: AbortSignal.timeout(3000),
-        }).catch(() => null)
-      }
-      if (res && res.ok) {
-        const data = await res.json()
-        if (data && Array.isArray(data.providers) && data.providers.length > 0) {
-          const map: Record<string, ProviderPreset> = {}
-          for (const p of data.providers) {
-            map[p.id] = {
-              name: p.name,
-              baseUrl: p.baseUrl || p.base_url || '',
-              teacherModel: p.teacherModel || p.teacher_model || '',
-              studentModel: p.studentModel || p.student_model || '',
-              keyRequired: p.id === 'openai' || p.id === 'anthropic' ? false : (p.keyRequired ?? p.key_required ?? true),
-            }
-          }
-          if (mounted.current) {
-            setProviders(map)
-            setLoadingProviders(false)
-            setServiceError('')
-            setProviderType((prev) => {
-              const nextType = map[prev] ? prev : (data.providers[0]?.id || Object.keys(map)[0] || '')
-              const active = map[nextType]
-              if (active) {
-                setBaseUrl((b) => b || active.baseUrl)
-                setTeacherModel((t) => t || active.teacherModel)
-                setStudentModel((s) => s || active.studentModel)
-              }
-              return nextType
-            })
-            void checkAuthStatuses()
-            return // Successfully retrieved providers, stop polling
-          }
-        }
-      }
-    } catch (err) {
-      console.warn('Could not fetch available providers from microservice:', err)
-    }
-
-    // Retry if microservice is still starting up
-    if (mounted.current) {
-      retryCount.current += 1
-      if (retryCount.current > 10) {
-        setLoadingProviders(false)
-        setServiceError(
-          'Chat microservice is unavailable or unreachable on port 8071. Please ensure the backend is started.',
-        )
-      } else {
-        pollTimerRef.current = setTimeout(() => {
-          void fetchProviders()
-        }, 1500)
-      }
-    }
-  }
-
   useEffect(() => {
     mounted.current = true
     document.title = 'Analog AI Harness Setup'
 
-    void fetchProviders()
+    void checkAuthStatuses()
 
     const onMessage = (event: MessageEvent) => {
       if (
@@ -176,7 +189,6 @@ export function Welcome({ api }: { api: WelcomeApi }) {
     return () => {
       mounted.current = false
       window.removeEventListener('message', onMessage)
-      if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
     }
   }, [providerType])
 
@@ -226,7 +238,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
       if (preset.studentModel) setStudentModel(preset.studentModel)
     }
     setError('')
-    if (type === 'openai' || type === 'anthropic') {
+    if (type === 'openai_oauth' || type === 'anthropic_oauth' || type === 'openai' || type === 'anthropic') {
       void checkAuthStatuses()
     }
   }
@@ -238,15 +250,15 @@ export function Welcome({ api }: { api: WelcomeApi }) {
     }
 
     const preset = providers[providerType]
-    const isOpenAI = providerType === 'openai'
-    const isAnthropic = providerType === 'anthropic'
+    const isOpenAIOAuth = providerType === 'openai_oauth'
+    const isAnthropicOAuth = providerType === 'anthropic_oauth'
 
-    if (isOpenAI) {
+    if (isOpenAIOAuth) {
       if (!openAIAuth?.connected) {
         setError('Please sign in with OpenAI before continuing.')
         return
       }
-    } else if (isAnthropic) {
+    } else if (isAnthropicOAuth) {
       if (!anthropicAuth?.connected) {
         setError('Please sign in with Anthropic before continuing.')
         return
@@ -287,14 +299,21 @@ export function Welcome({ api }: { api: WelcomeApi }) {
     setStatusMessage('Configuring Analog AI distillation proxy...')
 
     const effectiveApiKey =
-      providerType === 'openai'
+      providerType === 'openai_oauth'
         ? 'oauth:openai:default'
-        : providerType === 'anthropic'
+        : providerType === 'anthropic_oauth'
           ? 'oauth:anthropic:default'
           : apiKey.trim()
 
+    const effectiveProviderType =
+      providerType === 'openai_oauth'
+        ? 'openai'
+        : providerType === 'anthropic_oauth'
+          ? 'anthropic'
+          : providerType
+
     const params: AnalogSetupParams = {
-      providerType,
+      providerType: effectiveProviderType,
       providerApiKey: effectiveApiKey,
       providerBaseUrl: baseUrl.trim() || undefined,
       reasoningModel: teacherModel.trim(),
@@ -333,9 +352,9 @@ export function Welcome({ api }: { api: WelcomeApi }) {
   }
 
   const selectedPreset = providers[providerType]
-  const isOpenAI = providerType === 'openai'
-  const isAnthropic = providerType === 'anthropic'
-  const isOAuthProvider = isOpenAI || isAnthropic
+  const isOpenAIOAuth = providerType === 'openai_oauth'
+  const isAnthropicOAuth = providerType === 'anthropic_oauth'
+  const isOAuthProvider = isOpenAIOAuth || isAnthropicOAuth
   const showBaseUrl = providerType === 'custom' || providerType === 'ollama'
 
   return (
@@ -393,112 +412,82 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                 <p>Choose your provider and configure credentials</p>
               </header>
 
-              {loadingProviders ? (
-                <div className="key-field" style={{ textAlign: 'center', padding: '1.5rem 0' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                    <StateDot state="ongoing" size={14} />
-                    <p style={{ opacity: 0.8, fontSize: '0.95rem', margin: 0 }}>
-                      Connecting to Analog AI service...
-                    </p>
-                  </div>
-                </div>
-              ) : serviceError || Object.keys(providers).length === 0 ? (
-                <div className="key-field" style={{ textAlign: 'center', padding: '1.5rem 0' }}>
-                  <p className="key-error" role="alert" style={{ marginBottom: '1rem' }}>
-                    {serviceError || 'Chat microservice is unavailable. Unable to load providers.'}
-                  </p>
-                  <button
-                    className="secondary"
-                    type="button"
-                    onClick={() => {
-                      setLoadingProviders(true)
-                      setServiceError('')
-                      setError('')
-                      retryCount.current = 0
-                      void fetchProviders()
-                    }}
-                  >
-                    Retry Connection
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="key-field">
-                    <label htmlFor="provider-select">Provider</label>
-                    <select
-                      id="provider-select"
-                      value={providerType}
-                      disabled={busy}
-                      onChange={(e) => handleProviderChange(e.target.value)}
+              <div className="key-field">
+                <label htmlFor="provider-select">Provider</label>
+                <select
+                  id="provider-select"
+                  value={providerType}
+                  disabled={busy}
+                  onChange={(e) => handleProviderChange(e.target.value)}
+                >
+                  {Object.entries(providers).map(([key, val]) => (
+                    <option key={key} value={key}>
+                      {val.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* OpenAI OAuth Card */}
+              {isOpenAIOAuth && (
+                <div className="openai-subscription-card">
+                  <div className="openai-subscription-header">
+                    <div className="openai-subscription-title">
+                      <OpenAIIcon style={{ color: '#10a37f' }} />
+                      <span>OpenAI / ChatGPT Subscription (Codex)</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="openai-login-btn"
+                      disabled={busy || loggingInProvider === 'openai'}
+                      onClick={() => { void handleOAuthLogin('openai') }}
                     >
-                      {Object.entries(providers).map(([key, val]) => (
-                        <option key={key} value={key}>
-                          {val.name}
-                        </option>
-                      ))}
-                    </select>
+                      {openAIAuth?.connected ? 'Reconnect' : 'Sign in with OpenAI'}
+                    </button>
                   </div>
-
-                  {/* OpenAI OAuth Card */}
-                  {isOpenAI && (
-                    <div className="openai-subscription-card">
-                      <div className="openai-subscription-header">
-                        <div className="openai-subscription-title">
-                          <OpenAIIcon style={{ color: '#10a37f' }} />
-                          <span>OpenAI / ChatGPT Subscription</span>
-                        </div>
-                        <button
-                          type="button"
-                          className="openai-login-btn"
-                          disabled={busy || loggingInProvider === 'openai'}
-                          onClick={() => { void handleOAuthLogin('openai') }}
-                        >
-                          {openAIAuth?.connected ? 'Reconnect' : 'Sign in with OpenAI'}
-                        </button>
-                      </div>
-                      {openAIAuth?.connected ? (
-                        <div className="openai-connected-status">
-                          <span>✓ Connected: {openAIAuth.account_email || 'Account active'}</span>
-                        </div>
-                      ) : (
-                        <p className="openai-desc">
-                          Sign in to authenticate directly with your OpenAI account. No API key required.
-                        </p>
-                      )}
+                  {openAIAuth?.connected ? (
+                    <div className="openai-connected-status">
+                      <span>✓ Connected: {openAIAuth.account_email || 'Account active'}</span>
                     </div>
+                  ) : (
+                    <p className="openai-desc">
+                      Sign in to authenticate directly with your OpenAI account. No API key required.
+                    </p>
                   )}
+                </div>
+              )}
 
-                  {/* Anthropic OAuth Card */}
-                  {isAnthropic && (
-                    <div className="anthropic-subscription-card">
-                      <div className="anthropic-subscription-header">
-                        <div className="anthropic-subscription-title">
-                          <AnthropicIcon style={{ color: '#f59e0b' }} />
-                          <span>Anthropic / Claude Subscription</span>
-                        </div>
-                        <button
-                          type="button"
-                          className="anthropic-login-btn"
-                          disabled={busy || loggingInProvider === 'anthropic'}
-                          onClick={() => { void handleOAuthLogin('anthropic') }}
-                        >
-                          {anthropicAuth?.connected ? 'Reconnect' : 'Sign in with Anthropic'}
-                        </button>
-                      </div>
-                      {anthropicAuth?.connected ? (
-                        <div className="anthropic-connected-status">
-                          <span>✓ Connected: {anthropicAuth.account_email || 'Account active'}</span>
-                        </div>
-                      ) : (
-                        <p className="anthropic-desc">
-                          Sign in to authenticate directly with your Anthropic account. No API key required.
-                        </p>
-                      )}
+              {/* Anthropic OAuth Card */}
+              {isAnthropicOAuth && (
+                <div className="anthropic-subscription-card">
+                  <div className="anthropic-subscription-header">
+                    <div className="anthropic-subscription-title">
+                      <AnthropicIcon style={{ color: '#f59e0b' }} />
+                      <span>Anthropic / Claude Subscription (Claude Code)</span>
                     </div>
+                    <button
+                      type="button"
+                      className="anthropic-login-btn"
+                      disabled={busy || loggingInProvider === 'anthropic'}
+                      onClick={() => { void handleOAuthLogin('anthropic') }}
+                    >
+                      {anthropicAuth?.connected ? 'Reconnect' : 'Sign in with Anthropic'}
+                    </button>
+                  </div>
+                  {anthropicAuth?.connected ? (
+                    <div className="anthropic-connected-status">
+                      <span>✓ Connected: {anthropicAuth.account_email || 'Account active'}</span>
+                    </div>
+                  ) : (
+                    <p className="anthropic-desc">
+                      Sign in to authenticate directly with your Anthropic account. No API key required.
+                    </p>
                   )}
+                </div>
+              )}
 
-                  {/* Standard API Key / Base URL for other providers */}
-                  {!isOAuthProvider && (
+              {/* Standard API Key / Base URL for other providers */}
+              {!isOAuthProvider && (
                     <>
                       <div className="key-field">
                         <label htmlFor="key-input">
@@ -545,8 +534,6 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                       )}
                     </>
                   )}
-                </>
-              )}
 
               {error && (
                 <p className="key-error" role="alert">
@@ -560,7 +547,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                 id="step1-next-btn"
                 className="primary"
                 type="button"
-                disabled={busy || loadingProviders || Object.keys(providers).length === 0}
+                disabled={busy}
                 onClick={handleStep1Next}
               >
                 Next

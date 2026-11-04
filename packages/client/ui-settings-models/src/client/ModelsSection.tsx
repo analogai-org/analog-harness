@@ -49,8 +49,11 @@ interface ProviderPreset {
 }
 
 const DEFAULT_PRESETS: ProviderPreset[] = [
+  { id: 'openai_oauth', name: 'OpenAI Subscription (Codex)', baseUrl: 'https://api.openai.com/v1', keyHint: 'OAuth' },
+  { id: 'anthropic_oauth', name: 'Anthropic Subscription (Claude Code)', baseUrl: 'https://api.anthropic.com/v1', keyHint: 'OAuth' },
   { id: 'openai', name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', keyHint: 'sk-...' },
   { id: 'anthropic', name: 'Anthropic', baseUrl: 'https://api.anthropic.com/v1', keyHint: 'sk-ant-...' },
+  { id: 'ollama', name: 'Ollama (Local)', baseUrl: 'http://localhost:11434/v1', keyHint: 'None or ollama' },
   { id: 'gemini', name: 'Google Gemini', baseUrl: '', keyHint: 'AIzaSy...' },
   { id: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', keyHint: 'sk-...' },
   { id: 'grok', name: 'Grok (xAI)', baseUrl: 'https://api.x.ai/v1', keyHint: 'xai-...' },
@@ -63,7 +66,6 @@ const DEFAULT_PRESETS: ProviderPreset[] = [
   { id: 'xai', name: 'xAI (Grok)', baseUrl: '', keyHint: 'xai-...' },
   { id: 'cerebras', name: 'Cerebras', baseUrl: '', keyHint: 'csk-...' },
   { id: 'sambanova', name: 'SambaNova', baseUrl: '', keyHint: '...' },
-  { id: 'ollama', name: 'Ollama (Local)', baseUrl: 'http://localhost:11434/v1', keyHint: 'None or ollama' },
   { id: 'vllm', name: 'vLLM / Local Server', baseUrl: 'http://localhost:8000/v1', keyHint: 'None or token' },
   { id: 'custom', name: 'Custom OpenAI-Compatible', baseUrl: '', keyHint: '...' },
 ]
@@ -188,31 +190,8 @@ export function ModelsSection(_props?: ModelsSectionProps) {
       setLoading(true)
       setErrorMsg(null)
 
-      // 1. Fetch available-providers dynamically to sync catalog presets
-      try {
-        let pRes = await fetch(`${CHAT_BASE_URL}/v1/available-providers`, { signal: AbortSignal.timeout(3000) }).catch(() => null)
-        if (!pRes || !pRes.ok) {
-          pRes = await fetch(`${CHAT_BASE_URL}/available-providers`, { signal: AbortSignal.timeout(3000) }).catch(() => null)
-        }
-        if (pRes && pRes.ok) {
-          const pData = await pRes.json()
-          if (pData && Array.isArray(pData.providers) && pData.providers.length > 0) {
-            const dynamicPresets: ProviderPreset[] = pData.providers.map((p: any) => ({
-              id: p.id,
-              name: p.name,
-              baseUrl: p.baseUrl || p.base_url || '',
-              keyHint: p.id === 'openai' ? 'OAuth or sk-...' : p.id === 'anthropic' ? 'OAuth or sk-ant-...' : 'API Key',
-            }))
-            // Add custom if not present
-            if (!dynamicPresets.some(p => p.id === 'custom')) {
-              dynamicPresets.push({ id: 'custom', name: 'Custom OpenAI-Compatible', baseUrl: '', keyHint: '...' })
-            }
-            setPresets(dynamicPresets)
-          }
-        }
-      } catch {
-        // Fallback to DEFAULT_PRESETS if available-providers endpoint fails
-      }
+      // 1. Always use client-side DEFAULT_PRESETS
+      setPresets(DEFAULT_PRESETS)
 
       // 2. Fetch agents
       let currentAgentId = activeAgentId
@@ -323,8 +302,8 @@ export function ModelsSection(_props?: ModelsSectionProps) {
   // --- Provider Modal Actions ---
   const openAddProviderModal = () => {
     setEditingProvider(null)
-    setProviderPreset('openai')
-    setProviderName('OpenAI')
+    setProviderPreset('openai_oauth')
+    setProviderName('OpenAI Subscription (Codex)')
     setProviderBaseUrl('https://api.openai.com/v1')
     setProviderApiKey(openAIAuth?.connected ? 'oauth:openai:default' : '')
     setProviderModalOpen(true)
@@ -332,8 +311,18 @@ export function ModelsSection(_props?: ModelsSectionProps) {
 
   const openEditProviderModal = (p: ProviderItem) => {
     setEditingProvider(p)
-    const match = presets.find(pr => pr.baseUrl === p.base_url || pr.name.toLowerCase() === p.name.toLowerCase() || pr.id === p.name.toLowerCase())
-    const presetId = match ? match.id : (p.name.toLowerCase() === 'openai' ? 'openai' : p.name.toLowerCase() === 'anthropic' ? 'anthropic' : 'custom')
+    const isOAuthKey = p.api_key?.startsWith('oauth:')
+    let presetId = 'custom'
+    if (isOAuthKey || p.name.toLowerCase().includes('codex') || p.display_name?.toLowerCase().includes('codex')) {
+      if (p.name.toLowerCase().includes('openai') || p.display_name?.toLowerCase().includes('openai') || p.api_key?.includes('openai')) {
+        presetId = 'openai_oauth'
+      } else if (p.name.toLowerCase().includes('anthropic') || p.display_name?.toLowerCase().includes('anthropic') || p.api_key?.includes('anthropic')) {
+        presetId = 'anthropic_oauth'
+      }
+    } else {
+      const match = presets.find(pr => pr.baseUrl === p.base_url || pr.name.toLowerCase() === p.name.toLowerCase() || pr.id === p.name.toLowerCase())
+      presetId = match ? match.id : (p.name.toLowerCase() === 'openai' ? 'openai' : p.name.toLowerCase() === 'anthropic' ? 'anthropic' : 'custom')
+    }
     setProviderPreset(presetId)
     setProviderName(p.display_name || p.name)
     setProviderBaseUrl(p.base_url || '')
@@ -350,32 +339,34 @@ export function ModelsSection(_props?: ModelsSectionProps) {
         setProviderBaseUrl(match.baseUrl)
       }
     }
-    if (presetId === 'openai') {
+    if (presetId === 'openai_oauth') {
       setProviderApiKey('oauth:openai:default')
-    } else if (presetId === 'anthropic') {
+    } else if (presetId === 'anthropic_oauth') {
       setProviderApiKey('oauth:anthropic:default')
+    } else if (presetId === 'openai' || presetId === 'anthropic') {
+      setProviderApiKey('')
     }
   }
 
   const handleSaveProvider = async () => {
     if (!providerName.trim()) return
 
-    const isOpenAI = providerPreset === 'openai'
-    const isAnthropic = providerPreset === 'anthropic'
-    const isOAuth = isOpenAI || isAnthropic
+    const isOpenAIOAuth = providerPreset === 'openai_oauth'
+    const isAnthropicOAuth = providerPreset === 'anthropic_oauth'
+    const isOAuth = isOpenAIOAuth || isAnthropicOAuth
 
-    if (isOpenAI && !openAIAuth?.connected) {
+    if (isOpenAIOAuth && !openAIAuth?.connected) {
       setErrorMsg('Please sign in with OpenAI before saving.')
       return
     }
-    if (isAnthropic && !anthropicAuth?.connected) {
+    if (isAnthropicOAuth && !anthropicAuth?.connected) {
       setErrorMsg('Please sign in with Anthropic before saving.')
       return
     }
 
-    const effectiveApiKey = isOpenAI
+    const effectiveApiKey = isOpenAIOAuth
       ? 'oauth:openai:default'
-      : isAnthropic
+      : isAnthropicOAuth
         ? 'oauth:anthropic:default'
         : providerApiKey.trim()
 
@@ -385,7 +376,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
       const payload: Record<string, any> = {
         name: providerName.trim(),
         display_name: providerName.trim(),
-        base_url: isOAuth ? (providerPreset === 'openai' ? 'https://api.openai.com/v1' : 'https://api.anthropic.com/v1') : (providerBaseUrl.trim() || null),
+        base_url: isOAuth ? (providerPreset === 'openai_oauth' ? 'https://api.openai.com/v1' : 'https://api.anthropic.com/v1') : (providerBaseUrl.trim() || null),
         api_key: effectiveApiKey,
         agent_id: activeAgentId,
       }
@@ -515,7 +506,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
     return found ? (found.display_name || found.name) : 'Unknown'
   }
 
-  const isSelectedOAuth = providerPreset === 'openai' || providerPreset === 'anthropic'
+  const isSelectedOAuth = providerPreset === 'openai_oauth' || providerPreset === 'anthropic_oauth'
 
   return (
     <div className={styles.section}>
@@ -696,13 +687,13 @@ export function ModelsSection(_props?: ModelsSectionProps) {
             </div>
 
             {/* In-Modal OpenAI OAuth helper */}
-            {providerPreset === 'openai' && (
+            {providerPreset === 'openai_oauth' && (
               <div className={styles.modalOAuthBoxOpenAI}>
                 <div className={styles.modalOAuthRow}>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 13, color: '#10a37f', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <OpenAIIcon style={{ color: '#10a37f' }} />
-                      <span>Use OpenAI / ChatGPT Subscription</span>
+                      <span>Use OpenAI Subscription (Codex)</span>
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', marginTop: 2 }}>
                       {openAIAuth?.connected
@@ -725,13 +716,13 @@ export function ModelsSection(_props?: ModelsSectionProps) {
             )}
 
             {/* In-Modal Anthropic OAuth helper */}
-            {providerPreset === 'anthropic' && (
+            {providerPreset === 'anthropic_oauth' && (
               <div className={styles.modalOAuthBoxAnthropic}>
                 <div className={styles.modalOAuthRow}>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 13, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <AnthropicIcon style={{ color: '#f59e0b' }} />
-                      <span>Use Anthropic / Claude Subscription</span>
+                      <span>Use Anthropic Subscription (Claude Code)</span>
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', marginTop: 2 }}>
                       {anthropicAuth?.connected
