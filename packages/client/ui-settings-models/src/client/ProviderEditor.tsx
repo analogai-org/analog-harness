@@ -526,10 +526,8 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                 onClick={() => { void handleOAuthLogin() }}
               >
                 {toolInstalling
-                  ? 'Connecting…'
-                  : keyState?.configured || oauthStatus?.status === 'success'
-                    ? 'Re-authenticate'
-                    : (oauthProviderKey === 'openai' ? 'Log in with OpenAI' : 'Log in with Anthropic')}
+                  ? t('oauthConnecting')
+                  : t('oauthConnect')}
               </button>
             </div>
 

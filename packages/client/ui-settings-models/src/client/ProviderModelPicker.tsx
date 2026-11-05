@@ -114,10 +114,36 @@ const FALLBACK_PROVIDER_MODELS: Record<string, ProviderModel[]> = {
 
 interface ProviderModelPickerProps {
   providerId: string
+  provider?: { id: string; provider_type?: string; name?: string; display_name?: string; auth_type?: string; api_key?: string } | undefined
   value: string
   onChange: (value: string) => void
   t: (key: ModelsKey) => string
-  loadModels?: (providerId: string, signal: AbortSignal) => Promise<ProviderModel[]>
+  loadModels?: ((providerId: string, signal: AbortSignal) => Promise<ProviderModel[]>) | undefined
+}
+
+function resolveProviderPresetKey(providerId: string, provider?: ProviderModelPickerProps['provider']): string {
+  if (provider) {
+    const isOAuth = provider.auth_type === 'subscription' || provider.api_key?.startsWith('oauth:')
+    const type = provider.provider_type?.toLowerCase() || ''
+    const name = (provider.display_name || provider.name || '').toLowerCase()
+    const key = provider.api_key || ''
+
+    if (isOAuth || name.includes('codex') || name.includes('claude code')) {
+      if (type === 'openai' || name.includes('openai') || key.includes('openai')) return 'openai_oauth'
+      if (type === 'anthropic' || name.includes('anthropic') || key.includes('anthropic')) return 'anthropic_oauth'
+    }
+    if (type && FALLBACK_PROVIDER_MODELS[type]) return type
+    if (FALLBACK_PROVIDER_MODELS[name]) return name
+    for (const presetKey of Object.keys(FALLBACK_PROVIDER_MODELS)) {
+      if (name.includes(presetKey)) return presetKey
+    }
+  }
+  const idLower = providerId.toLowerCase()
+  if (FALLBACK_PROVIDER_MODELS[idLower]) return idLower
+  for (const presetKey of Object.keys(FALLBACK_PROVIDER_MODELS)) {
+    if (idLower.includes(presetKey)) return presetKey
+  }
+  return idLower
 }
 
 type CatalogueState = { providerId: string } & (
@@ -131,14 +157,15 @@ type CatalogueState = { providerId: string } & (
  * @param props - controlled model ID, provider catalogue loader, and section copy.
  * @returns labelled model ID and catalogue controls with local query feedback.
  */
-export function ProviderModelPicker({ providerId, value, onChange, t, loadModels }: ProviderModelPickerProps): ReactNode {
+export function ProviderModelPicker({ providerId, provider, value, onChange, t, loadModels }: ProviderModelPickerProps): ReactNode {
   const statusId = useId()
-  const fallbackModels = FALLBACK_PROVIDER_MODELS[providerId.toLowerCase()] ?? []
+  const fallbackKey = resolveProviderPresetKey(providerId, provider)
+  const fallbackModels = FALLBACK_PROVIDER_MODELS[fallbackKey] ?? []
   const [catalogue, setCatalogue] = useState<CatalogueState>({ providerId: '', kind: 'ready', models: fallbackModels })
 
   useEffect(() => {
     const loader = loadModels
-    const fallback = FALLBACK_PROVIDER_MODELS[providerId.toLowerCase()] ?? []
+    const fallback = FALLBACK_PROVIDER_MODELS[fallbackKey] ?? []
     if (!providerId || !loader) {
       setCatalogue({ providerId, kind: 'ready', models: fallback })
       return
@@ -156,7 +183,7 @@ export function ProviderModelPicker({ providerId, value, onChange, t, loadModels
     }
     void load()
     return () => { controller.abort() }
-  }, [providerId, loadModels])
+  }, [providerId, fallbackKey, loadModels])
 
   const current = catalogue.providerId === providerId ? catalogue : undefined
   const models = current && 'models' in current && current.models.length > 0
@@ -182,7 +209,7 @@ export function ProviderModelPicker({ providerId, value, onChange, t, loadModels
         >
           <option value="">{t(loading ? 'providerModelCatalogLoading' : 'providerModelCatalogChoose')}</option>
           {models.map(model => <option key={model.id} value={model.id}>
-            {model.name || model.id}
+            {model.name && model.name !== model.id ? `${model.name} (${model.id})` : model.id}
           </option>)}
         </select>
       </label>

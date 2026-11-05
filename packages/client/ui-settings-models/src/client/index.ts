@@ -79,7 +79,8 @@ export function apply(ctx: ClientContext): void {
   const page = globalThis as Partial<Record<typeof ONBOARDING_CONFIG_GLOBAL, unknown>>
   const payload = page[ONBOARDING_CONFIG_GLOBAL]
   const configured = Config(payload === undefined ? {} : payload)
-  const credentialOnboarding = configured.credentialOnboarding && !('dshDesktop' in globalThis)
+  const opensAuthExternally = 'dshDesktop' in globalThis
+  const credentialOnboarding = configured.credentialOnboarding && !opensAuthExternally
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-settings-models: copy dictionaries')
 
   const schema = createSettingsSchemaOperations(ctx.settingsSchema)
@@ -91,6 +92,7 @@ export function apply(ctx: ClientContext): void {
   // one bound translate; copy freshness rides the locale revision.
   const t = ctx.locale.bind(NS) as ModelsSectionInjected['t']
   const injected = (): ModelsSectionInjected => ({
+    opensAuthExternally,
     controller,
     hooks: { snapshot: controller.store },
     operations,

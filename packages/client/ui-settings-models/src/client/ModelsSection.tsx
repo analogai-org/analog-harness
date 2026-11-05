@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, type ReactNode } from 'react'
+import { useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { en } from './locales.ts'
 import { ProviderModelPicker } from './ProviderModelPicker.tsx'
@@ -6,11 +6,13 @@ import { providerDisplayLabel } from './provider-labels.ts'
 import styles from './ModelsSection.module.css'
 
 export interface ModelsSectionInjected {
+  /** The desktop shell opens sign-in in an external browser without a popup handle. */
+  opensAuthExternally: boolean
   controller: any
   hooks: any
   operations: any
   schema: any
-  t: (key: keyof typeof en, params?: any) => string
+  t: (key: keyof typeof en, params?: Readonly<Record<string, string>>) => string
 }
 
 export type ModelsSectionProps = Partial<ModelsSectionInjected> & {
@@ -124,6 +126,27 @@ interface OAuthStatus {
   tool?: string
 }
 
+/** Read the selected account without borrowing another connection's status. */
+async function readOAuthStatus(
+  provider: 'openai' | 'anthropic',
+  connectionId: string | undefined,
+  signal: AbortSignal,
+): Promise<OAuthStatus> {
+  const query = connectionId === undefined ? '' : `?connection_id=${encodeURIComponent(connectionId)}`
+  const response = await fetch(`${CHAT_BASE_URL}/v1/auth/${provider}/status${query}`, {
+    signal: AbortSignal.any([signal, AbortSignal.timeout(3000)]),
+  })
+  if (!response.ok) throw new Error('Could not read subscription connection status')
+  const data: unknown = await response.json()
+  if (data === null || typeof data !== 'object' || !('connected' in data) || typeof data.connected !== 'boolean') {
+    throw new Error('Invalid subscription connection status')
+  }
+  return {
+    connected: data.connected,
+    ...('account_email' in data && typeof data.account_email === 'string' ? { account_email: data.account_email } : {}),
+  }
+}
+
 function OpenAIIcon({ style }: { style?: React.CSSProperties }) {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style={style}>
@@ -140,12 +163,31 @@ function AnthropicIcon({ style }: { style?: React.CSSProperties }) {
   )
 }
 
+function openAIConnectionId(apiKey: string | undefined): string | undefined {
+  const prefix = 'oauth:openai:'
+  const connectionId = apiKey?.startsWith(prefix) ? apiKey.slice(prefix.length) : undefined
+  return connectionId || undefined
+}
+
+function providerAuthStatusUrl(provider: ProviderItem): string | undefined {
+  if (provider.auth_type !== 'subscription' && !provider.api_key?.startsWith('oauth:')) return undefined
+  if (provider.provider_type === 'openai' || provider.api_key?.startsWith('oauth:openai:')) {
+    const connectionId = openAIConnectionId(provider.api_key) ?? 'default'
+    return `${CHAT_BASE_URL}/v1/auth/openai/status?connection_id=${encodeURIComponent(connectionId)}`
+  }
+  if (provider.provider_type === 'anthropic' || provider.api_key?.startsWith('oauth:anthropic:')) {
+    return `${CHAT_BASE_URL}/v1/auth/anthropic/status`
+  }
+  return undefined
+}
+
 export function ModelsSection(_props?: ModelsSectionProps) {
   const t = _props?.t ?? ((key: keyof typeof en) => en[key])
   const presetLabel = (preset: ProviderPreset): string => preset.nameKey ? t(preset.nameKey) : preset.name
   const [_agents, setAgents] = useState<AgentItem[]>([])
   const [activeAgentId, setActiveAgentId] = useState<string>('default')
   const [providers, setProviders] = useState<ProviderItem[]>([])
+  const [providerAuthStatuses, setProviderAuthStatuses] = useState<Record<string, OAuthStatus>>({})
   const [presets, setPresets] = useState<ProviderPreset[]>(DEFAULT_PRESETS)
   const [models, setModels] = useState<ModelItem[]>([])
   const [loading, setLoading] = useState<boolean>(true)
@@ -154,7 +196,9 @@ export function ModelsSection(_props?: ModelsSectionProps) {
   // OAuth statuses
   const [openAIAuth, setOpenAIAuth] = useState<OAuthStatus | null>(null)
   const [anthropicAuth, setAnthropicAuth] = useState<OAuthStatus | null>(null)
+  const [oauthConnectionId, setOAuthConnectionId] = useState<string | undefined>(undefined)
   const [loggingInProvider, setLoggingInProvider] = useState<'openai' | 'anthropic' | null>(null)
+  const oauthAttempt = useRef<AbortController | undefined>(undefined)
 
   // Provider Modal state
   const [providerModalOpen, setProviderModalOpen] = useState<boolean>(false)
@@ -175,35 +219,6 @@ export function ModelsSection(_props?: ModelsSectionProps) {
 
   // Delete Provider confirm modal
   const [deletingProviderId, setDeletingProviderId] = useState<string | null>(null)
-
-  const checkAuthStatuses = useCallback(async () => {
-    try {
-      const [oRes, aRes] = await Promise.all([
-        fetch(`${CHAT_BASE_URL}/v1/auth/openai/status`, { signal: AbortSignal.timeout(3000) }).catch(() => null),
-        fetch(`${CHAT_BASE_URL}/v1/auth/anthropic/status`, { signal: AbortSignal.timeout(3000) }).catch(() => null),
-      ])
-      if (oRes && oRes.ok) {
-        const data = await oRes.json()
-        setOpenAIAuth({
-          connected: Boolean(data.connected),
-          account_email: data.account_email,
-          expires_in: data.expires_in,
-          tool: data.tool,
-        })
-      }
-      if (aRes && aRes.ok) {
-        const data = await aRes.json()
-        setAnthropicAuth({
-          connected: Boolean(data.connected),
-          account_email: data.account_email,
-          expires_in: data.expires_in,
-          tool: data.tool,
-        })
-      }
-    } catch {
-      // ignore
-    }
-  }, [])
 
   const loadData = useCallback(async () => {
     try {
@@ -235,6 +250,19 @@ export function ModelsSection(_props?: ModelsSectionProps) {
         const provData = await provRes.json()
         loadedProviders = Array.isArray(provData) ? provData : provData.providers || []
         setProviders(loadedProviders)
+        const statuses = await Promise.all(loadedProviders.map(async provider => {
+          const url = providerAuthStatusUrl(provider)
+          if (url === undefined) return undefined
+          const response = await fetch(url, { signal: AbortSignal.timeout(3000) }).catch(() => null)
+          if (!response?.ok) return undefined
+          const data: unknown = await response.json().catch(() => null)
+          if (data === null || typeof data !== 'object' || !('connected' in data) || typeof data.connected !== 'boolean') return undefined
+          return [provider.id, {
+            connected: data.connected,
+            ...('account_email' in data && typeof data.account_email === 'string' ? { account_email: data.account_email } : {}),
+          }] as const
+        }))
+        setProviderAuthStatuses(Object.fromEntries(statuses.filter((entry): entry is readonly [string, OAuthStatus] => entry !== undefined)))
       }
 
       // 4. Fetch models for active agent
@@ -246,77 +274,113 @@ export function ModelsSection(_props?: ModelsSectionProps) {
         setModels(loadedModels)
       }
 
-      // 5. Fetch OAuth status
-      void checkAuthStatuses()
-
-
-    } catch (err: any) {
+    } catch (_error: unknown) {
       setErrorMsg(`Could not connect to Chat backend at ${CHAT_BASE_URL}. Ensure chat service is running.`)
     } finally {
       setLoading(false)
     }
-  }, [activeAgentId, checkAuthStatuses])
+  }, [activeAgentId])
 
   useEffect(() => {
     loadData()
   }, [loadData])
 
-  // Listen for OAuth completion messages
+  useEffect(() => () => { oauthAttempt.current?.abort() }, [providerModalOpen, providerPreset])
+
   useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      if (
-        event.data?.type === 'openai_oauth_success' ||
-        event.data?.type === 'anthropic_oauth_success' ||
-        event.data?.type === 'oauth_success'
-      ) {
-        void checkAuthStatuses()
-        void loadData()
-        setLoggingInProvider(null)
+    if (!providerModalOpen) return
+    const provider = providerPreset === 'openai_oauth' ? 'openai'
+      : providerPreset === 'anthropic_oauth' ? 'anthropic' : undefined
+    if (provider === undefined || (provider === 'openai' && editingProvider === null)) return
+    const controller = new AbortController()
+    const connectionId = provider === 'openai'
+      ? openAIConnectionId(editingProvider?.api_key) ?? 'default' : undefined
+    void readOAuthStatus(provider, connectionId, controller.signal).then(status => {
+      if (controller.signal.aborted) return
+      if (provider === 'openai') setOpenAIAuth(status)
+      else setAnthropicAuth(status)
+    }).catch((_error: unknown) => {
+      // An unavailable status leaves the account unconfirmed in this editor.
+      if (controller.signal.aborted) return
+      setErrorMsg(t('oauthStatusFailed'))
+    })
+    return () => { controller.abort() }
+  }, [providerModalOpen, providerPreset, editingProvider])
+
+  const handleOAuthLogin = (provider: 'openai' | 'anthropic') => {
+    oauthAttempt.current?.abort()
+    const controller = new AbortController()
+    oauthAttempt.current = controller
+    const connectionId = provider === 'openai' ? crypto.randomUUID() : undefined
+    setOAuthConnectionId(connectionId)
+    setLoggingInProvider(provider)
+    setErrorMsg(null)
+    if (provider === 'openai') setOpenAIAuth({ connected: false })
+    else setAnthropicAuth({ connected: false })
+
+    const query = new URLSearchParams({ agent_id: activeAgentId, create_provider: 'false' })
+    if (connectionId !== undefined) query.set('connection_id', connectionId)
+    const popup = window.open(
+      `${CHAT_BASE_URL}/v1/auth/${provider}/login?${query}`,
+      `${provider}_oauth_popup`,
+      'width=620,height=750,menubar=no,toolbar=no',
+    )
+    if (popup === null && _props?.opensAuthExternally !== true) {
+      controller.abort()
+      setLoggingInProvider(null)
+      setErrorMsg(t('oauthPopupBlocked'))
+      return
+    }
+
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let checking = false
+    const finish = (failure?: keyof typeof en) => {
+      setLoggingInProvider(null)
+      if (failure !== undefined) setErrorMsg(t(failure))
+      controller.abort()
+    }
+    const poll = async () => {
+      if (checking || controller.signal.aborted) return
+      clearTimeout(timer)
+      checking = true
+      try {
+        const status = await readOAuthStatus(provider, connectionId, controller.signal)
+        if (controller.signal.aborted) return
+        if (status.connected) {
+          if (provider === 'openai') setOpenAIAuth(status)
+          else {
+            setAnthropicAuth(status)
+            setProviderApiKey('oauth:anthropic:default')
+          }
+          finish()
+          return
+        }
+      } catch (_error: unknown) {
+        // A transient status failure is retried while the sign-in popup stays open.
+        if (controller.signal.aborted) return
+      } finally {
+        checking = false
       }
+      if (popup?.closed) {
+        finish('oauthNotCompleted')
+        return
+      }
+      timer = setTimeout(() => { void poll() }, 400)
+    }
+    const onMessage = (event: MessageEvent<unknown>) => {
+      // The popup can return through a separate loopback origin; only backend status confirms sign-in.
+      if (popup === null || event.source !== popup) return
+      const data = event.data
+      if (data === null || typeof data !== 'object' || !('type' in data)) return
+      if (data.type === `${provider}_oauth_success` || data.type === 'oauth_success') void poll()
     }
     window.addEventListener('message', onMessage)
-    return () => window.removeEventListener('message', onMessage)
-  }, [checkAuthStatuses, loadData])
-
-  // --- OAuth Login Actions ---
-  const handleOAuthLogin = async (pType: 'openai' | 'anthropic') => {
-    setLoggingInProvider(pType)
-    setErrorMsg(null)
-    try {
-      await fetch(`${CHAT_BASE_URL}/v1/auth/${pType}/tools/login?agent_id=${activeAgentId}`, {
-        method: 'POST',
-      }).catch(() => null)
-
-      const loginUrl = `${CHAT_BASE_URL}/v1/auth/${pType}/login?agent_id=${activeAgentId}`
-      const popup = window.open(loginUrl, `${pType}_oauth_popup`, 'width=620,height=750,menubar=no,toolbar=no')
-
-      let elapsed = 0
-      const interval = setInterval(async () => {
-        elapsed += 1000
-        try {
-          const res = await fetch(`${CHAT_BASE_URL}/v1/auth/${pType}/status`).then(r => r.json()).catch(() => null)
-          if (res?.connected) {
-            clearInterval(interval)
-            setLoggingInProvider(null)
-            await checkAuthStatuses()
-            await loadData()
-            setProviderApiKey(`oauth:${pType}:default`)
-            return
-          }
-        } catch {
-          // ignore
-        }
-        if (elapsed > 45000 || popup?.closed) {
-          clearInterval(interval)
-          setLoggingInProvider(null)
-          await checkAuthStatuses()
-          await loadData()
-        }
-      }, 1000)
-    } catch (err: any) {
-      setErrorMsg(`Failed to launch ${pType} login: ` + (err?.message || ''))
-      setLoggingInProvider(null)
-    }
+    controller.signal.addEventListener('abort', () => {
+      clearTimeout(timer)
+      window.removeEventListener('message', onMessage)
+      popup?.close()
+    }, { once: true })
+    void poll()
   }
 
   // --- Provider Modal Actions ---
@@ -325,12 +389,16 @@ export function ModelsSection(_props?: ModelsSectionProps) {
     setProviderPreset('openai_oauth')
     setProviderName('OpenAI Subscription (Codex)')
     setProviderBaseUrl('https://api.openai.com/v1')
-    setProviderApiKey(openAIAuth?.connected ? 'oauth:openai:default' : '')
+    setProviderApiKey('')
+    setOAuthConnectionId(undefined)
+    setOpenAIAuth(null)
+    setLoggingInProvider(null)
     setProviderModalOpen(true)
   }
 
   const openEditProviderModal = (p: ProviderItem) => {
     setEditingProvider(p)
+    setLoggingInProvider(null)
     const isOAuthKey = p.auth_type === 'subscription' || p.api_key?.startsWith('oauth:')
     let presetId = 'custom'
     if (isOAuthKey || p.name.toLowerCase().includes('codex') || p.display_name?.toLowerCase().includes('codex')) {
@@ -347,11 +415,18 @@ export function ModelsSection(_props?: ModelsSectionProps) {
     setProviderName(providerDisplayLabel(p, t))
     setProviderBaseUrl(p.base_url || '')
     setProviderApiKey(p.api_key || '')
+    const connectionId = presetId === 'openai_oauth' ? openAIConnectionId(p.api_key) ?? 'default' : undefined
+    setOAuthConnectionId(connectionId)
+    setOpenAIAuth(null)
     setProviderModalOpen(true)
   }
 
   const handlePresetChange = (presetId: string) => {
     setProviderPreset(presetId)
+    setOAuthConnectionId(undefined)
+    setOpenAIAuth(null)
+    setAnthropicAuth(null)
+    setLoggingInProvider(null)
     const match = presets.find(p => p.id === presetId)
     if (match) {
       if (presetId !== 'custom') {
@@ -360,11 +435,14 @@ export function ModelsSection(_props?: ModelsSectionProps) {
       }
     }
     if (presetId === 'openai_oauth') {
-      setProviderApiKey('oauth:openai:default')
+      setProviderApiKey('')
+      setOAuthConnectionId(undefined)
     } else if (presetId === 'anthropic_oauth') {
       setProviderApiKey('oauth:anthropic:default')
+      setOAuthConnectionId(undefined)
     } else if (presetId === 'openai' || presetId === 'anthropic') {
       setProviderApiKey('')
+      setOAuthConnectionId(undefined)
     }
   }
 
@@ -375,8 +453,12 @@ export function ModelsSection(_props?: ModelsSectionProps) {
     const isAnthropicOAuth = providerPreset === 'anthropic_oauth'
     const isOAuth = isOpenAIOAuth || isAnthropicOAuth
 
-    if (isOpenAIOAuth && !openAIAuth?.connected) {
-      setErrorMsg('Please sign in with OpenAI before saving.')
+    if (isOpenAIOAuth && !editingProvider && !openAIAuth?.connected) {
+      setErrorMsg(t('oauthConnectRequired'))
+      return
+    }
+    if (isOpenAIOAuth && !editingProvider && oauthConnectionId === undefined) {
+      setErrorMsg(t('oauthConnectRequired'))
       return
     }
     if (isAnthropicOAuth && !anthropicAuth?.connected) {
@@ -385,7 +467,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
     }
 
     const effectiveApiKey = isOpenAIOAuth
-      ? 'oauth:openai:default'
+      ? oauthConnectionId === undefined ? editingProvider?.api_key ?? '' : `oauth:openai:${oauthConnectionId}`
       : isAnthropicOAuth
         ? 'oauth:anthropic:default'
         : providerApiKey.trim()
@@ -556,7 +638,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
         </p>
       </div>
 
-      {errorMsg && (
+      {errorMsg && !providerModalOpen && (
         <div className={styles.diagnosticBanner}>
           {errorMsg}
         </div>
@@ -589,13 +671,17 @@ export function ModelsSection(_props?: ModelsSectionProps) {
               ) : (
                 providers.map(p => {
                   const isOAuthKey = p.auth_type === 'subscription' || p.api_key?.startsWith('oauth:')
+                  const accountEmail = providerAuthStatuses[p.id]?.account_email
                   return (
                     <tr key={p.id}>
-                      <td className={styles.td}>
+                      <td className={`${styles.td} ${styles.providerNameCell}`}>
                         <strong>{providerDisplayLabel(p, t)}</strong>
+                        {isOAuthKey && providerAuthStatuses[p.id]?.connected && accountEmail && (
+                          <span className={styles.providerAccount}>{accountEmail}</span>
+                        )}
                       </td>
-                      <td className={`${styles.td} ${styles.tdMonospace}`}>{p.base_url || '-'}</td>
-                      <td className={`${styles.td} ${styles.tdMonospace}`}>
+                      <td className={`${styles.td} ${styles.tdMonospace} ${styles.providerUrlCell}`}>{p.base_url || '-'}</td>
+                      <td className={`${styles.td} ${styles.tdMonospace} ${styles.providerAuthCell}`}>
                         {isOAuthKey ? (
                           <span style={{ color: p.name.toLowerCase() === 'openai' ? '#10a37f' : '#f59e0b', fontWeight: 500 }}>
                             OAuth Subscription
@@ -733,22 +819,21 @@ export function ModelsSection(_props?: ModelsSectionProps) {
                       <OpenAIIcon style={{ color: '#10a37f' }} />
                       <span>Use OpenAI Subscription (Codex)</span>
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', marginTop: 2 }}>
+                    <div aria-live="polite" style={{ fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', marginTop: 2 }}>
                       {openAIAuth?.connected
-                        ? `Connected (${openAIAuth.account_email || 'Account active'}). Tokens auto-refresh.`
-                        : 'Sign in with your OpenAI account. No API key required.'}
+                        ? t('oauthConnected', { account: openAIAuth.account_email || t('oauthAccountFallback') })
+                        : t('openAIConnectDescription')}
                     </div>
                   </div>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      void handleOAuthLogin('openai')
-                      setProviderApiKey('oauth:openai:default')
-                    }}
-                    disabled={loggingInProvider === 'openai'}
-                  >
-                    {openAIAuth?.connected ? 'Reconnect' : 'Sign in with OpenAI'}
-                  </Button>
+                  {!editingProvider && !(oauthConnectionId !== undefined && openAIAuth?.connected) && (
+                    <Button
+                      variant="outline"
+                      onClick={() => { handleOAuthLogin('openai') }}
+                      disabled={loggingInProvider === 'openai'}
+                    >
+                      {loggingInProvider === 'openai' ? t('oauthConnecting') : t('oauthConnect')}
+                    </Button>
+                  )}
                 </div>
               </div>
             )}
@@ -764,19 +849,16 @@ export function ModelsSection(_props?: ModelsSectionProps) {
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--dsw-alias-label-tertiary)', marginTop: 2 }}>
                       {anthropicAuth?.connected
-                        ? `Connected (${anthropicAuth.account_email || 'Account active'}). Tokens auto-refresh.`
-                        : 'Sign in with your Anthropic account. No API key required.'}
+                        ? t('oauthConnected', { account: anthropicAuth.account_email || t('oauthAccountFallback') })
+                        : t('oauthConnectDescription')}
                     </div>
                   </div>
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      void handleOAuthLogin('anthropic')
-                      setProviderApiKey('oauth:anthropic:default')
-                    }}
+                    onClick={() => { handleOAuthLogin('anthropic') }}
                     disabled={loggingInProvider === 'anthropic'}
                   >
-                    {anthropicAuth?.connected ? 'Reconnect' : 'Sign in with Anthropic'}
+                    {loggingInProvider === 'anthropic' ? t('oauthConnecting') : t('oauthConnect')}
                   </Button>
                 </div>
               </div>
@@ -827,12 +909,13 @@ export function ModelsSection(_props?: ModelsSectionProps) {
               </div>
             )}
 
+            {errorMsg && <div className={styles.diagnosticBanner} role="alert">{errorMsg}</div>}
             <div className={styles.modalActions}>
               <Button variant="ghost" onClick={() => setProviderModalOpen(false)}>
                 Cancel
               </Button>
-              <Button variant="primary" onClick={handleSaveProvider} disabled={providerSaving}>
-                {providerSaving ? 'Saving...' : 'Save Provider'}
+              <Button variant="primary" onClick={() => { void handleSaveProvider() }} disabled={providerSaving || loggingInProvider !== null}>
+                {providerSaving ? t('providerSaving') : editingProvider ? t('providerSave') : t('providerAdd')}
               </Button>
             </div>
           </div>
@@ -869,6 +952,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
 
             <ProviderModelPicker
               providerId={selectedProviderId}
+              provider={providers.find(p => p.id === selectedProviderId)}
               value={selectedModelName}
               onChange={setSelectedModelName}
               t={t}

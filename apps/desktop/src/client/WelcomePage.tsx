@@ -551,7 +551,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                       disabled={busy || loggingInProvider === 'openai'}
                       onClick={() => { void handleOAuthLogin('openai') }}
                     >
-                      {openAIAuth?.connected ? 'Reconnect' : 'Sign in with OpenAI'}
+                      {loggingInProvider === 'openai' ? 'Connecting…' : 'Connect'}
                     </button>
                   </div>
                   {openAIAuth?.connected ? (
@@ -580,7 +580,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
                       disabled={busy || loggingInProvider === 'anthropic'}
                       onClick={() => { void handleOAuthLogin('anthropic') }}
                     >
-                      {anthropicAuth?.connected ? 'Reconnect' : 'Sign in with Anthropic'}
+                      {loggingInProvider === 'anthropic' ? 'Connecting…' : 'Connect'}
                     </button>
                   </div>
                   {anthropicAuth?.connected ? (
