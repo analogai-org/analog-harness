@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-pwsh-local",
   "description": "Local PowerShell implementation of the AnalogAI Harness bash executor seam",
-  "version": "0.3.9",
+  "version": "0.3.10",
   "publishConfig": {
     "access": "public"
   },
