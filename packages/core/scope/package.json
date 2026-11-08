@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-scope",
   "description": "Scoped-context registration primitive (scope tags, scope-filtered event dispatch) for the AnalogAI Harness",
-  "version": "0.3.13",
+  "version": "0.3.14",
   "publishConfig": {
     "access": "public"
   },

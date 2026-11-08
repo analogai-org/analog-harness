@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-compaction",
   "description": "Abstract compaction service seam (ctx.compaction) for the AnalogAI Harness",
-  "version": "0.3.13",
+  "version": "0.3.14",
   "publishConfig": {
     "access": "public"
   },
