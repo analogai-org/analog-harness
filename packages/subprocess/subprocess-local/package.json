@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-subprocess-local",
   "description": "Local-subprocess implementation of the AnalogAI Harness subprocess seam",
-  "version": "0.3.14",
+  "version": "0.3.15",
   "publishConfig": {
     "access": "public"
   },
