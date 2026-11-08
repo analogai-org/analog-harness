@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-ptc-runtime-python",
   "description": "CPython subprocess implementation of the AnalogAI Harness PTC execution seam",
-  "version": "0.3.16",
+  "version": "0.3.17",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
