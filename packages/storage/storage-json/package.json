@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-storage-json",
   "description": "JSON file KV storage backend for the AnalogAI Harness storage hub",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "publishConfig": {
     "access": "public"
   },
