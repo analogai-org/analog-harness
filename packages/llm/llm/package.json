@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-llm",
   "description": "Provider-neutral LLM service interface for the AnalogAI Harness",
-  "version": "0.3.15",
+  "version": "0.3.16",
   "publishConfig": {
     "access": "public"
   },

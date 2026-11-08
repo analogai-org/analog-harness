@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-compaction-basic",
   "description": "Token-meter-driven compaction policy and LLM summarization backend for the AnalogAI Harness",
-  "version": "0.3.15",
+  "version": "0.3.16",
   "publishConfig": {
     "access": "public"
   },
