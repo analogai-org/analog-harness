@@ -125,8 +125,8 @@ const config = {
     icon: join(root, 'resources/icon-macos.png'),
     category: 'public.app-category.developer-tools',
     target: [
-      { target: 'dmg', arch: ['arm64', 'x64'] },
-      { target: 'zip', arch: ['arm64', 'x64'] },
+      { target: 'dmg', arch: [process.env.DSH_DESKTOP_TARGET_ARCH || (process.arch === 'arm64' ? 'arm64' : 'x64')] },
+      { target: 'zip', arch: [process.env.DSH_DESKTOP_TARGET_ARCH || (process.arch === 'arm64' ? 'arm64' : 'x64')] },
     ],
     identity: null,
   },
