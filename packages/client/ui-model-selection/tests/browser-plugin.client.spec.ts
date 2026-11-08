@@ -68,6 +68,7 @@ const GROUPS = [{
 async function bench(locale: 'zh' | 'en' = 'zh') {
   const ctx = new Context()
   let defaultSelection: ModelSelection = { provider: 'deepseek-official', model: 'deepseek-v4-flash' }
+  let active: ModelSelection | null | undefined
   let selected = defaultSelection
   const calls = { models: 0, select: 0 }
   const projections = new Map<SessionId, SnapshotStore<ModelSelectionProjection | undefined>>()
@@ -84,6 +85,7 @@ async function bench(locale: 'zh' | 'en' = 'zh') {
         ok: true as const,
         value: {
           default: defaultSelection,
+          ...(active === undefined ? {} : { active }),
           routableProviders: routable ? ['deepseek-official'] : [],
           groups: routable ? groups : [],
           failures: [],
@@ -192,6 +194,7 @@ async function bench(locale: 'zh' | 'en' = 'zh') {
       selectionFailure = new RemoteError('session/writer-held', 'writer held', { sessionId: sid('owned') })
     },
     setHostCurrent: (selection: ModelSelection) => { defaultSelection = selection },
+    setChatMain: (selection: ModelSelection | null) => { active = selection },
     setProjected: (id: SessionId, value: ModelSelectionProjection) => { projections.get(id)?.set(value) },
     address: (id: SessionId) => { addressed.add(id) },
     setGroups: (next: typeof GROUPS) => { groups = next },
@@ -204,6 +207,31 @@ async function bench(locale: 'zh' | 'en' = 'zh') {
 const projection = (id: string) => ({ sessionId: sid(id) })
 
 describe('ui-model-selection dual entry', () => {
+  it('shows Chat’s main model over a stale saved projection and refreshes after task allocation edits', async () => {
+    const b = await bench()
+    try {
+      const session = b.mint('stale')
+      const stale = { provider: 'deepseek-official', model: 'gpt-6-luna' }
+      session.projection.set({ lastUsed: stale, next: stale })
+      b.setChatMain({ provider: 'deepseek-official', model: 'deepseek-v4-pro' })
+      b.ctx.emit('session/model-catalog-invalidated')
+      const directory = b.ctx.modelDirectories.directoryFor(sid('stale'))
+      await directory.load()
+      expect(directory.store.getSnapshot().current).toEqual({ provider: 'deepseek-official', model: 'deepseek-v4-pro' })
+      b.setChatMain({ provider: 'deepseek-official', model: 'deepseek-v4-flash' })
+      b.ctx.emit('session/model-catalog-invalidated')
+      await directory.load()
+      expect(directory.store.getSnapshot().current).toEqual({ provider: 'deepseek-official', model: 'deepseek-v4-flash' })
+      expect(session.projection.getSnapshot()).toEqual({ lastUsed: stale, next: stale })
+      b.setChatMain(null)
+      b.setRoutable(false)
+      b.ctx.emit('session/model-catalog-invalidated')
+      await directory.load()
+      expect(directory.store.getSnapshot()).toMatchObject({ current: null, routable: false, groups: [] })
+    } finally {
+      await b.ctx.fiber.dispose()
+    }
+  })
   it('carries writer contention to the model seat and localizes the command failure', async () => {
     const b = await bench()
     b.mint('owned')

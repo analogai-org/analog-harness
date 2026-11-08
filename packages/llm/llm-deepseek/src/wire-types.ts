@@ -22,7 +22,7 @@ export type WireMessage = {
 
 /** JSON body submitted to the resolved Messages endpoint. */
 export type WireRequest = {
-  model: string
+  model?: string
   stream: true
   max_tokens: number
   messages: WireMessage[]

@@ -1,0 +1,43 @@
+- region "Task Model Allocation":
+  - heading "Task Model Allocation" [level=3]
+  - paragraph: Choose the Reasoning or Fast model for each task stage. Agent Execution sets the main chat model.
+  - text: Preprocessing Background tasks and untracked model calls.
+  - combobox "Preprocessing":
+    - option "Reasoning"
+    - option "Fast" [selected]
+  - status
+  - text: Semantic Role Labeling (SRL) Semantic role labeling during memory ingestion.
+  - combobox "Semantic Role Labeling (SRL)":
+    - option "Reasoning" [selected]
+    - option "Fast"
+  - status: Saved
+  - text: QA Synthesis Synthesize answers from semantic memory.
+  - combobox "QA Synthesis":
+    - option "Reasoning"
+    - option "Fast" [selected]
+  - status
+  - text: Agent Execution Main model for direct agent responses and execution.
+  - combobox "Agent Execution":
+    - option "Reasoning"
+    - option "Fast" [selected]
+  - status
+  - text: Memory Summarization Summarize episodic memory in the background.
+  - combobox "Memory Summarization":
+    - option "Reasoning"
+    - option "Fast" [selected]
+  - status
+  - text: Procedural Memory Summarization Extract blueprints and summaries from tool trajectories.
+  - combobox "Procedural Memory Summarization":
+    - option "Reasoning"
+    - option "Fast" [selected]
+  - status
+  - text: Procedural Memory Consolidation Synthesize and review final procedures.
+  - combobox "Procedural Memory Consolidation":
+    - option "Reasoning"
+    - option "Fast" [selected]
+  - status
+  - text: Turn Classification Classify the intent of each conversation turn.
+  - combobox "Turn Classification":
+    - option "Reasoning"
+    - option "Fast" [selected]
+  - status

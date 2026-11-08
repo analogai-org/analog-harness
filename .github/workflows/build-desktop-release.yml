@@ -2,41 +2,37 @@ name: Build & Release Desktop App (Analog)
 
 on:
   push:
-    tags:
-      - 'v*'
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       runner_strategy:
-        description: 'Runner Strategy (github-cloud or self-hosted)'
+        description: Runner strategy
         type: choice
-        options:
-          - github-cloud
-          - self-hosted
+        options: [github-cloud, self-hosted]
         default: github-cloud
       release_tag:
-        description: 'Release tag (e.g. v1.0.0)'
-        required: false
-        default: 'latest'
+        description: Matching Chat and Harness v<version> tag
+        required: true
       prerelease:
-        description: 'Publish as Pre-release (for testing before public launch)'
+        description: Publish as prerelease
         type: boolean
-        required: false
         default: false
 
 permissions:
   contents: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ inputs.release_tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   build:
     name: Build Desktop (${{ matrix.target }})
-    runs-on: ${{ inputs.runner_strategy == 'self-hosted' && matrix.self_hosted_runner || matrix.cloud_runner }}
+    runs-on: ${{ (inputs.runner_strategy || vars.DESKTOP_RUNNER_STRATEGY) == 'self-hosted' && matrix.self_hosted_runner || matrix.cloud_runner }}
     defaults:
       run:
-        shell: bash
+        shell: pwsh
+        working-directory: analog-harness
     strategy:
       fail-fast: false
       matrix:
@@ -44,220 +40,195 @@ jobs:
           - cloud_runner: macos-14
             self_hosted_runner: [self-hosted, macos-arm64]
             target: mac-arm64
-            dsh_platform: darwin
-            dsh_arch: arm64
-            builder_flag: --mac --arm64
-            artifact_pattern: "analog-harness/apps/desktop/release-builds/*.dmg"
+            platform: darwin
+            arch: arm64
+            builder_platform: --mac
+            builder_arch: --arm64
+            chat_asset: analog-chat-service-mac-arm64.tar.gz
+            installer: dmg
           - cloud_runner: windows-latest
             self_hosted_runner: [self-hosted, win-x64]
             target: win-x64
-            dsh_platform: win32
-            dsh_arch: x64
-            builder_flag: --win --x64
-            artifact_pattern: "analog-harness/apps/desktop/release-builds/*.exe"
+            platform: win32
+            arch: x64
+            builder_platform: --win
+            builder_arch: --x64
+            chat_asset: analog-chat-service-win-x64.zip
+            installer: exe
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+      DSH_DESKTOP_TARGET_PLATFORM: ${{ matrix.platform }}
+      DSH_DESKTOP_TARGET_ARCH: ${{ matrix.arch }}
+      DSH_DESKTOP_APP_ID: ai.analog.desktop
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
     steps:
-      - name: Checkout analog-harness Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.release_tag || github.ref_name }}
           path: analog-harness
+          persist-credentials: false
 
-      - name: Set up pnpm
-        if: "inputs.runner_strategy != 'self-hosted'"
-        uses: pnpm/action-setup@v3
+      - uses: pnpm/action-setup@v4
         with:
           version: 11.7.0
 
-      - name: Set up Node.js 22
-        if: "inputs.runner_strategy != 'self-hosted'"
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: 'pnpm'
-          cache-dependency-path: 'analog-harness/pnpm-lock.yaml'
+          node-version: 24
 
-      - name: Turborepo Cache
-        uses: actions/cache@v4
+      - uses: actions/checkout@v4
         with:
-          path: analog-harness/.turbo
-          key: ${{ runner.os }}-turbo-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-turbo-
+          repository: analogai-org/chat
+          ref: ${{ inputs.release_tag || github.ref_name }}
+          token: ${{ secrets.GH_PAT || secrets.ANALOG_CI_PAT }}
+          path: chat
+          persist-credentials: false
 
-      - name: Install Harness Dependencies
-        working-directory: analog-harness
+      - uses: actions/checkout@v4
+        with:
+          repository: analogai-org/foundation
+          token: ${{ secrets.GH_PAT || secrets.ANALOG_CI_PAT }}
+          path: foundation
+          persist-credentials: false
+
+      - uses: actions/checkout@v4
+        with:
+          repository: analogai-org/deepthink
+          token: ${{ secrets.GH_PAT || secrets.ANALOG_CI_PAT }}
+          path: deepthink
+          persist-credentials: false
+
+      - uses: actions/checkout@v4
+        with:
+          repository: analogai-org/deepact
+          token: ${{ secrets.GH_PAT || secrets.ANALOG_CI_PAT }}
+          path: deepact
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify version and install dependencies
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
-          echo "Detected version from package.json: $VERSION"
-          pnpm install --no-frozen-lockfile
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ($env:RELEASE_TAG -ne "v$version") { throw 'Release tag and Harness version differ' }
+          "APP_VERSION=$version" >> $env:GITHUB_ENV
+          pnpm install --frozen-lockfile
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
-      - name: Build Harness Libraries and Desktop Bundle
-        working-directory: analog-harness
+      - name: Build matching Chat backend
+        working-directory: chat
+        env:
+          POETRY_VIRTUALENVS_CREATE: 'false'
+        run: |
+          python -c "import os,tomllib; v=tomllib.load(open('pyproject.toml','rb'))['tool']['poetry']['version']; assert v == os.environ['APP_VERSION'], 'Chat and Harness versions differ'"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -m pip install --upgrade pip setuptools wheel Cython pyinstaller poetry
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -m poetry install --no-root --no-interaction
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python build_cython_binary.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Build and package Desktop
+        env:
+          ANALOG_CHAT_TAG: ${{ inputs.release_tag || github.ref_name }}
+          BUILDER_PLATFORM: ${{ matrix.builder_platform }}
+          BUILDER_ARCH: ${{ matrix.builder_arch }}
+          INSTALLER_EXT: ${{ matrix.installer }}
+          TARGET: ${{ matrix.target }}
         run: |
           pnpm run build:official
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          pnpm --dir apps/desktop run prepare:analog
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          pnpm --dir apps/desktop exec electron-builder --config analog-builder.config.mjs $env:BUILDER_PLATFORM $env:BUILDER_ARCH --publish never
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          foreach ($ext in @($env:INSTALLER_EXT, 'zip')) {
+            $artifact = "apps/desktop/release-builds/Analog-$($env:APP_VERSION)-$($env:TARGET).$ext"
+            if (-not (Test-Path $artifact) -or (Get-Item $artifact).Length -eq 0) { throw "Missing artifact: $artifact" }
+          }
 
-      - name: Wait for Chat Backend Compilation
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.ANALOG_CI_PAT || secrets.GITHUB_TOKEN }}
+      - name: Verify packaged backend starts on port 8071
         run: |
-          if ! command -v gh >/dev/null 2>&1; then
-            echo "gh CLI not found on runner, skipping active build watch and proceeding..."
-            exit 0
-          fi
-          echo "Checking for active 'chat' microservice compilation workflows on analogai-org/chat..."
-          ACTIVE_RUNS=$(gh run list --repo analogai-org/chat --workflow build-backend.yml --status in_progress --json databaseId -q '.[].databaseId' 2>/dev/null || true)
-          QUEUED_RUNS=$(gh run list --repo analogai-org/chat --workflow build-backend.yml --status queued --json databaseId -q '.[].databaseId' 2>/dev/null || true)
-          WAITING_RUNS=$(gh run list --repo analogai-org/chat --workflow build-backend.yml --status waiting --json databaseId -q '.[].databaseId' 2>/dev/null || true)
+          if ($IsWindows) {
+            $executable = 'apps/desktop/release-builds/win-unpacked/resources/analog-chat-service/analog-chat-service.exe'
+          } else {
+            $executable = 'apps/desktop/release-builds/mac-arm64/Analog.app/Contents/Resources/analog-chat-service/analog-chat-service'
+          }
+          node apps/desktop/scripts/smoke-chat-backend.mjs $executable
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
-          ALL_RUNS=$(echo "$ACTIVE_RUNS $QUEUED_RUNS $WAITING_RUNS" | xargs)
-          if [ -n "$ALL_RUNS" ]; then
-            for RUN_ID in $ALL_RUNS; do
-              if [ -n "$RUN_ID" ]; then
-                echo "Found active chat build (Run ID: $RUN_ID). Pausing desktop build until chat compilation finishes..."
-                gh run watch "$RUN_ID" --repo analogai-org/chat --exit-status || true
-              fi
-            done
-            echo "All active chat builds completed! Proceeding to fetch new binaries."
-          else
-            echo "No active chat builds detected. Proceeding to fetch backend."
-          fi
-
-      - name: Fetch Prebuilt Chat Backend & Prepare Embedded Runtime
-        working-directory: analog-harness/apps/desktop
+      - name: Archive verified Chat backend
+        working-directory: chat
         env:
-          DSH_DESKTOP_TARGET_PLATFORM: ${{ matrix.dsh_platform }}
-          DSH_DESKTOP_TARGET_ARCH: ${{ matrix.dsh_arch }}
-          GH_PAT: ${{ secrets.GH_PAT || secrets.ANALOG_CI_PAT || secrets.GITHUB_TOKEN }}
+          CHAT_ASSET: ${{ matrix.chat_asset }}
         run: |
-          pnpm run prepare:analog
+          if ($IsWindows) {
+            Compress-Archive -Path dist/analog-chat-service -DestinationPath $env:CHAT_ASSET
+          } else {
+            tar -czf $env:CHAT_ASSET -C dist analog-chat-service
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
 
-      - name: Cache Electron and electron-builder Binaries
-        uses: actions/cache@v4
+      - uses: actions/upload-artifact@v4
         with:
-          path: |
-            ~/.cache/electron
-            ~/.cache/electron-builder
-            ~/Library/Caches/electron
-            ~/Library/Caches/electron-builder
-            ~\AppData\Local\electron\Cache
-            ~\AppData\Local\electron-builder\Cache
-          key: ${{ runner.os }}-electron-${{ hashFiles('analog-harness/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-electron-
+          name: Chat-${{ matrix.target }}
+          path: chat/${{ matrix.chat_asset }}
+          if-no-files-found: error
+          retention-days: 7
 
-      - name: Package Desktop Installer (DMG / EXE)
-        working-directory: analog-harness/apps/desktop
-        env:
-          APP_VERSION: ${{ env.APP_VERSION }}
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-          DSH_DESKTOP_APP_ID: 'ai.analog.desktop'
-          DSH_DESKTOP_TARGET_PLATFORM: ${{ matrix.dsh_platform }}
-          DSH_DESKTOP_TARGET_ARCH: ${{ matrix.dsh_arch }}
-        run: |
-          pnpm exec electron-builder --config analog-builder.config.mjs ${{ matrix.builder_flag }}
-
-      - name: Verify ASAR and Packaging Integrity
-        working-directory: analog-harness/apps/desktop
-        run: |
-          node -e '
-          const fs = require("fs");
-          const path = require("path");
-          const { execSync } = require("child_process");
-
-          const releaseDir = path.join(process.cwd(), "release-builds");
-          console.log("[Verify] Inspecting release output in:", releaseDir);
-          if (!fs.existsSync(releaseDir)) {
-            console.error("FATAL: release-builds directory does not exist!");
-            process.exit(1);
-          }
-          const files = fs.readdirSync(releaseDir);
-          console.log("[Verify] Generated files:", files);
-
-          // Find mac app or win unpacked directory if present
-          const macApp = files.find(f => f.endsWith("-mac") || f.endsWith("-arm64") || f.endsWith("-x64"));
-          const winUnpacked = path.join(releaseDir, "win-unpacked");
-
-          let asarPath = null;
-          if (fs.existsSync(path.join(releaseDir, "mac-arm64", "Analog.app", "Contents", "Resources", "app.asar"))) {
-            asarPath = path.join(releaseDir, "mac-arm64", "Analog.app", "Contents", "Resources", "app.asar");
-          } else if (fs.existsSync(path.join(releaseDir, "mac", "Analog.app", "Contents", "Resources", "app.asar"))) {
-            asarPath = path.join(releaseDir, "mac", "Analog.app", "Contents", "Resources", "app.asar");
-          } else if (fs.existsSync(path.join(winUnpacked, "resources", "app.asar"))) {
-            asarPath = path.join(winUnpacked, "resources", "app.asar");
-          }
-
-          if (asarPath && fs.existsSync(asarPath)) {
-            console.log("[Verify] Checking ASAR contents at:", asarPath);
-            try {
-              const asarList = execSync(`npx @electron/asar list "${asarPath}"`, { encoding: "utf8" });
-              if (!asarList.includes("dsh/desktop-runtime.json") && !asarList.includes("desktop-runtime.json")) {
-                console.error("FATAL: desktop-runtime.json IS MISSING FROM app.asar!");
-                process.exit(1);
-              }
-              console.log("[Verify] SUCCESS: dsh/desktop-runtime.json found inside app.asar!");
-            } catch (err) {
-              console.warn("[Verify] Warning running asar list:", err.message);
-            }
-          }
-          '
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: Analog-${{ matrix.target }}
           path: |
             analog-harness/apps/desktop/release-builds/*.dmg
             analog-harness/apps/desktop/release-builds/*.exe
+            analog-harness/apps/desktop/release-builds/*.zip
           if-no-files-found: error
+          retention-days: 7
+
+      - name: Clean generated packaging files
+        if: always()
+        run: |
+          foreach ($path in @('apps/desktop/.desktop-build', 'apps/desktop/release-builds', 'apps/desktop/prebuilt', '../chat/dist', '../chat/build', '../chat/cython_staging')) {
+            if (Test-Path $path) { Remove-Item -LiteralPath $path -Recurse -Force }
+          }
 
   release:
     name: Publish GitHub Release
     needs: build
-    runs-on: ${{ inputs.runner_strategy == 'self-hosted' && 'self-hosted' || 'ubuntu-latest' }}
-    if: "!cancelled() && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')"
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout analog-harness Repository
-        uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
-          path: analog-harness
-
-      - name: Determine Release Tag and Name
-        id: release_meta
-        working-directory: analog-harness
-        run: |
-          PKG_VERSION=$(node -p "require('./package.json').version")
-          if [ "${{ github.ref_type }}" = "tag" ] && [[ "${{ github.ref_name }}" == v* ]]; then
-            TAG="${{ github.ref_name }}"
-          elif [ "${{ inputs.release_tag }}" != "" ] && [ "${{ inputs.release_tag }}" != "latest" ]; then
-            TAG="${{ inputs.release_tag }}"
-          else
-            TAG="v${PKG_VERSION}"
-          fi
-          echo "tag_name=${TAG}" >> $GITHUB_OUTPUT
-          echo "release_name=Analog Desktop ${TAG}" >> $GITHUB_OUTPUT
-          echo "Resolved Tag: ${TAG}"
-
-      - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+          pattern: Chat-*
+          path: chat-artifacts
+      - uses: softprops/action-gh-release@v2
         with:
+          repository: analogai-org/chat
+          token: ${{ secrets.GH_PAT || secrets.ANALOG_CI_PAT }}
+          tag_name: ${{ inputs.release_tag || github.ref_name }}
+          name: Analog Chat Service ${{ inputs.release_tag || github.ref_name }}
+          prerelease: ${{ inputs.prerelease || contains(inputs.release_tag || github.ref_name, '-') }}
+          fail_on_unmatched_files: true
+          files: |
+            chat-artifacts/**/analog-chat-service-mac-arm64.tar.gz
+            chat-artifacts/**/analog-chat-service-win-x64.zip
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Analog-*
           path: artifacts
-
-      - name: Display downloaded files
-        run: |
-          ls -R artifacts/
-
-      - name: Create or Update GitHub Release
-        uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.release_meta.outputs.tag_name }}
-          name: ${{ steps.release_meta.outputs.release_name }}
+          tag_name: ${{ inputs.release_tag || github.ref_name }}
+          name: Analog Desktop ${{ inputs.release_tag || github.ref_name }}
           generate_release_notes: true
-          draft: false
-          prerelease: false
+          prerelease: ${{ inputs.prerelease || contains(inputs.release_tag || github.ref_name, '-') }}
+          fail_on_unmatched_files: true
           files: |
             artifacts/**/*.dmg
             artifacts/**/*.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            artifacts/**/*.zip

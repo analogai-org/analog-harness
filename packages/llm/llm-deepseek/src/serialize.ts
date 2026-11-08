@@ -149,7 +149,7 @@ export function serialize(
   }
   const system = [options.system, historySystem].filter(Boolean).join('\n\n')
   return {
-    model: options.model, stream: true, messages,
+    stream: true, messages,
     max_tokens: options.maxTokens ?? model?.maxTokens ?? connection.maxTokens,
     thinking: { type: effort === 'off' ? 'disabled' : 'enabled' },
     ...effort === 'off' ? {} : { output_config: { effort: effort as 'low' | 'high' | 'max' } },

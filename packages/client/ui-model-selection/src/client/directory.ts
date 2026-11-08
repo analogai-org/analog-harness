@@ -16,7 +16,7 @@ import type { ModelCatalogDirectory } from './catalog.ts'
 
 /** Directory snapshot both entries render from. */
 export interface ModelDirectoryState {
-  /** Saved selection, retained even when its provider or model leaves the catalog. */
+  /** Chat's active main model, or the saved Session selection for other catalogs. */
   current: ModelSelection | null
   /** Saved effort caption retained when the selected model is unavailable. */
   retainedEffort?: string
@@ -76,14 +76,14 @@ export class ModelDirectory {
    */
   async load(): Promise<ModelDirectoryState> {
     this.assertAvailable()
-    await this.catalog.load()
+    await this.catalog.load(true)
     this.syncInputs()
     return this.store.getSnapshot()
   }
 
   /**
-   * Select the complete provider/model/reasoning selection. The durable
-   * projection frame updates the shared current; failures surface on the store
+   * Select the complete provider/model/reasoning selection. Chat refreshes its
+   * main allocation; other catalogs follow the durable Session projection. Failures surface on the store
    * and return with the operation so each entry can present its own failure.
    * @param selection - provider, provider-owned model id, and optional adapter-owned effort.
    * @returns the selection outcome, including the original Remote failure.
@@ -123,6 +123,7 @@ export class ModelDirectory {
       })
     }
     this.store.update((s) => { s.status = 'ready'; s.pending = null; s.error = null })
+    await this.catalog.load(true).catch((_catalogRefreshFailed: unknown) => { /* The catalog store exposes the failed refresh. */ })
     this.syncInputs()
     return { ok: true, value: undefined }
   }
@@ -158,12 +159,13 @@ export class ModelDirectory {
     if (this.disposed) return
     const catalog = this.catalog.store.getSnapshot()
     const projected = modelSelectionProjection(this.projected.getSnapshot())
-    const intended = projected?.next ?? catalog.value?.default
+    const chatBacked = catalog.value?.active !== undefined
+    const intended = chatBacked ? catalog.value?.active ?? undefined : projected?.next ?? catalog.value?.default
     const reasoning = intended === undefined ? undefined : this.catalog.reasoningFor(intended)
     const effort = intended?.reasoningEffort ?? reasoning?.defaultEffort
     const retainedEffort = effort === undefined ? undefined
       : reasoning?.efforts.find(level => level.id === effort)?.name ?? effort
-    if (catalog.status !== 'ready' || catalog.value === null || projected === undefined) {
+    if (catalog.status !== 'ready' || catalog.value === null || (projected === undefined && catalog.value.active === undefined)) {
       this.store.set({
         current: catalog.value === null ? null : this.store.getSnapshot().current,
         ...retainedEffort === undefined ? {} : { retainedEffort },
@@ -176,8 +178,8 @@ export class ModelDirectory {
       })
       return
     }
-    const selection = projected.next ?? catalog.value.default
-    const routable = catalog.value.groups.some(group => group.id === selection.provider
+    const selection = chatBacked ? catalog.value.active ?? null : projected?.next ?? catalog.value.default
+    const routable = selection !== null && catalog.value.groups.some(group => group.id === selection.provider
       && group.models.some(model => model.id === selection.model))
     this.store.set({
       current: selection,

@@ -9,109 +9,6 @@ interface ProviderModel {
   name?: string
 }
 
-const FALLBACK_PROVIDER_MODELS: Record<string, ProviderModel[]> = {
-  openai: [
-    { id: 'o3-mini' },
-    { id: 'o1' },
-    { id: 'o1-mini' },
-    { id: 'gpt-4o' },
-    { id: 'gpt-4o-mini' },
-    { id: 'gpt-4-turbo' },
-    { id: 'gpt-3.5-turbo' },
-  ],
-  openai_oauth: [
-    { id: 'gpt-6-astra' },
-    { id: 'gpt-6.1-sol' },
-    { id: 'gpt-6-sol' },
-    { id: 'gpt-6.1-terra' },
-    { id: 'gpt-6-luna' },
-    { id: 'gpt-5.6-sol' },
-    { id: 'gpt-5.6-terra' },
-    { id: 'gpt-5.6-luna' },
-    { id: 'gpt-5.3-codex' },
-  ],
-  anthropic: [
-    { id: 'claude-3-7-sonnet-20250219' },
-    { id: 'claude-3-5-sonnet-20241022' },
-    { id: 'claude-3-5-haiku-20241022' },
-    { id: 'claude-3-opus-20240229' },
-  ],
-  anthropic_oauth: [
-    { id: 'claude-opus-5-5' },
-    { id: 'claude-sonnet-5-5' },
-    { id: 'claude-haiku-5-5' },
-    { id: 'claude-fable-5-1' },
-    { id: 'claude-opus-5' },
-    { id: 'claude-sonnet-5' },
-    { id: 'claude-fable-5' },
-    { id: 'claude-opus-4-8' },
-    { id: 'claude-opus-4-7' },
-    { id: 'claude-sonnet-4-6' },
-    { id: 'claude-opus-4-6' },
-    { id: 'claude-opus-4-5' },
-    { id: 'claude-sonnet-4-5' },
-    { id: 'claude-haiku-4-5' },
-  ],
-  deepseek: [
-    { id: 'deepseek-reasoner' },
-    { id: 'deepseek-chat' },
-  ],
-  gemini: [
-    { id: 'gemini-2.0-flash-thinking-exp' },
-    { id: 'gemini-2.0-flash' },
-    { id: 'gemini-2.0-pro-exp-02-05' },
-    { id: 'gemini-1.5-pro' },
-    { id: 'gemini-1.5-flash' },
-  ],
-  grok: [
-    { id: 'grok-2-mini' },
-    { id: 'grok-2-1212' },
-    { id: 'grok-beta' },
-  ],
-  xai: [
-    { id: 'grok-2-mini' },
-    { id: 'grok-2-1212' },
-  ],
-  ollama: [
-    { id: 'deepseek-r1:14b' },
-    { id: 'deepseek-r1:8b' },
-    { id: 'deepseek-r1:70b' },
-    { id: 'qwen2.5-coder:7b' },
-    { id: 'qwen2.5-coder:14b' },
-    { id: 'llama3.3:70b' },
-    { id: 'llama3.1:8b' },
-  ],
-  mistral: [
-    { id: 'mistral-large-latest' },
-    { id: 'mistral-small-latest' },
-    { id: 'codestral-latest' },
-    { id: 'ministral-8b-latest' },
-  ],
-  openrouter: [
-    { id: 'deepseek/deepseek-r1' },
-    { id: 'deepseek/deepseek-chat' },
-    { id: 'anthropic/claude-3.7-sonnet' },
-    { id: 'openai/o3-mini' },
-    { id: 'meta-llama/llama-3.3-70b-instruct' },
-    { id: 'google/gemini-2.0-flash-001' },
-  ],
-  together: [
-    { id: 'deepseek-ai/DeepSeek-R1' },
-    { id: 'deepseek-ai/DeepSeek-V3' },
-    { id: 'meta-llama/Llama-3.3-70B-Instruct-Turbo' },
-    { id: 'Qwen/Qwen2.5-Coder-32B-Instruct' },
-  ],
-  cerebras: [
-    { id: 'llama3.3-70b' },
-    { id: 'llama3.1-8b' },
-    { id: 'deepseek-r1-distill-llama-70b' },
-  ],
-  vllm: [
-    { id: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-14B' },
-    { id: 'Qwen/Qwen2.5-Coder-7B-Instruct' },
-  ],
-}
-
 interface ProviderModelPickerProps {
   providerId: string
   provider?: { id: string; provider_type?: string; name?: string; display_name?: string; auth_type?: string; api_key?: string } | undefined
@@ -119,31 +16,6 @@ interface ProviderModelPickerProps {
   onChange: (value: string) => void
   t: (key: ModelsKey) => string
   loadModels?: ((providerId: string, signal: AbortSignal) => Promise<ProviderModel[]>) | undefined
-}
-
-function resolveProviderPresetKey(providerId: string, provider?: ProviderModelPickerProps['provider']): string {
-  if (provider) {
-    const isOAuth = provider.auth_type === 'subscription' || provider.api_key?.startsWith('oauth:')
-    const type = provider.provider_type?.toLowerCase() || ''
-    const name = (provider.display_name || provider.name || '').toLowerCase()
-    const key = provider.api_key || ''
-
-    if (isOAuth || name.includes('codex') || name.includes('claude code')) {
-      if (type === 'openai' || name.includes('openai') || key.includes('openai')) return 'openai_oauth'
-      if (type === 'anthropic' || name.includes('anthropic') || key.includes('anthropic')) return 'anthropic_oauth'
-    }
-    if (type && FALLBACK_PROVIDER_MODELS[type]) return type
-    if (FALLBACK_PROVIDER_MODELS[name]) return name
-    for (const presetKey of Object.keys(FALLBACK_PROVIDER_MODELS)) {
-      if (name.includes(presetKey)) return presetKey
-    }
-  }
-  const idLower = providerId.toLowerCase()
-  if (FALLBACK_PROVIDER_MODELS[idLower]) return idLower
-  for (const presetKey of Object.keys(FALLBACK_PROVIDER_MODELS)) {
-    if (idLower.includes(presetKey)) return presetKey
-  }
-  return idLower
 }
 
 type CatalogueState = { providerId: string } & (
@@ -157,17 +29,14 @@ type CatalogueState = { providerId: string } & (
  * @param props - controlled model ID, provider catalogue loader, and section copy.
  * @returns labelled model ID and catalogue controls with local query feedback.
  */
-export function ProviderModelPicker({ providerId, provider, value, onChange, t, loadModels }: ProviderModelPickerProps): ReactNode {
+export function ProviderModelPicker({ providerId, value, onChange, t, loadModels }: ProviderModelPickerProps): ReactNode {
   const statusId = useId()
-  const fallbackKey = resolveProviderPresetKey(providerId, provider)
-  const fallbackModels = FALLBACK_PROVIDER_MODELS[fallbackKey] ?? []
-  const [catalogue, setCatalogue] = useState<CatalogueState>({ providerId: '', kind: 'ready', models: fallbackModels })
+  const [catalogue, setCatalogue] = useState<CatalogueState>({ providerId: '', kind: 'ready', models: [] })
 
   useEffect(() => {
     const loader = loadModels
-    const fallback = FALLBACK_PROVIDER_MODELS[fallbackKey] ?? []
     if (!providerId || !loader) {
-      setCatalogue({ providerId, kind: 'ready', models: fallback })
+      setCatalogue({ providerId, kind: 'ready', models: [] })
       return
     }
     const controller = new AbortController()
@@ -175,20 +44,17 @@ export function ProviderModelPicker({ providerId, provider, value, onChange, t, 
     const load = async (): Promise<void> => {
       try {
         const fetched = await loader(providerId, controller.signal)
-        const merged = fetched.length > 0 ? fetched : fallback
-        if (!controller.signal.aborted) setCatalogue({ providerId, kind: 'ready', models: merged })
+        if (!controller.signal.aborted) setCatalogue({ providerId, kind: 'ready', models: fetched })
       } catch {
-        if (!controller.signal.aborted) setCatalogue({ providerId, kind: fallback.length > 0 ? 'ready' : 'error', models: fallback })
+        if (!controller.signal.aborted) setCatalogue({ providerId, kind: 'error' })
       }
     }
     void load()
     return () => { controller.abort() }
-  }, [providerId, fallbackKey, loadModels])
+  }, [providerId, loadModels])
 
   const current = catalogue.providerId === providerId ? catalogue : undefined
-  const models = current && 'models' in current && current.models.length > 0
-    ? current.models
-    : fallbackModels
+  const models = current && 'models' in current ? current.models : []
   const loading = current?.kind === 'loading'
   const message = current?.kind === 'error' && models.length === 0
     ? t('providerModelCatalogFailed')

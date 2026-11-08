@@ -39,7 +39,6 @@ import { ConversationPanel } from './skeleton/ConversationPanel.tsx'
 import { ConversationHeader } from './skeleton/ConversationHeader.tsx'
 import { ConversationSession, ConversationSessionHeader } from './skeleton/ConversationSession.tsx'
 import { CreditsBadge } from './skeleton/CreditsBadge.tsx'
-import { SavingsBadge } from './skeleton/SavingsBadge.tsx'
 import { InputBar } from './skeleton/InputBar.tsx'
 import { todoDockEntry } from './skeleton/TodoPanel.tsx'
 import { installStopShortcut } from './stop-shortcut.ts'
@@ -546,11 +545,6 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   })
 
   slots.inject('conversation.session.header.utilities', function* () {
-    yield slots.register({
-      name: 'conversation.session.header.utilities',
-      id: 'savings-badge',
-      order: 90,
-    }, SavingsBadge)
     yield slots.register({
       name: 'conversation.session.header.utilities',
       id: 'credits-badge',

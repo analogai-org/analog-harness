@@ -28,6 +28,10 @@ describe('web e2e: provider model suggestions with a manually editable ID', () =
   const models: Record<string, unknown>[] = []
   const saved: Record<string, unknown>[] = []
   const unexpected: string[] = []
+  const taskModels = Object.fromEntries([
+    'preprocessing', 'srl', 'qa_synthesis', 'agent_execution', 'memory_summarization',
+    'procedural_memory_summarization', 'procedural_memory_consolidation', 'turn_classification',
+  ].map(task => [task, { task_type: task, model_type: task === 'agent_execution' ? 'reasoning' : 'fast' }]))
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold({})
@@ -52,6 +56,13 @@ describe('web e2e: provider model suggestions with a manually editable ID', () =
       if (method === 'GET' && path === '/v1/agents') response = [{ id: 'default', name: 'Fixture Agent' }]
       else if (method === 'GET' && path === '/v1/providers') response = PROVIDERS
       else if (method === 'GET' && path === '/v1/agents/default/models') response = models
+      else if (method === 'GET' && path === '/v1/agents/default/task-models') response = taskModels
+      else if (method === 'PUT' && path.startsWith('/v1/agents/default/task-models/')) {
+        const task = path.split('/').at(-1)!
+        const payload = request.postDataJSON() as { model_type: string }
+        taskModels[task] = { task_type: task, model_type: payload.model_type }
+        response = { status: 'success', ...taskModels[task] }
+      }
       else if (method === 'GET' && (path === '/v1/auth/openai/status' || path === '/v1/auth/anthropic/status')) {
         response = { connected: false }
       } else if (method === 'GET' && path === '/v1/providers/openai-api/models') {
@@ -99,7 +110,7 @@ describe('web e2e: provider model suggestions with a manually editable ID', () =
     const input = dialog.getByRole('textbox', { name: 'Model ID', exact: true })
     const catalog = dialog.getByRole('combobox', { name: 'Available models', exact: true })
     const provider = dialog.getByRole('combobox').first()
-    await catalog.getByRole('option', { name: 'Fixture OpenAI model (fixture/openai-v1)', exact: true }).waitFor()
+    await catalog.getByRole('option', { name: 'Fixture OpenAI model (fixture/openai-v1)', exact: true }).waitFor({ state: 'attached' })
     await catalog.selectOption('fixture/openai-v1')
     expect(await input.inputValue()).toBe('fixture/openai-v1')
     await compareOrRefreshGolden(join(EXPECTED, 'listed-model.expected.md'), await captureStableAria(
@@ -108,10 +119,10 @@ describe('web e2e: provider model suggestions with a manually editable ID', () =
 
     await input.fill(CUSTOM_MODEL)
     await provider.selectOption('openai-subscription')
-    await catalog.getByRole('option', { name: 'Fixture subscription model (fixture/subscription-v1)', exact: true }).waitFor()
+    await catalog.getByRole('option', { name: 'Fixture subscription model (fixture/subscription-v1)', exact: true }).waitFor({ state: 'attached' })
     expect(await input.inputValue()).toBe(CUSTOM_MODEL)
     await provider.selectOption('anthropic-api')
-    await catalog.getByRole('option', { name: 'Fixture Anthropic model (fixture/anthropic-v1)', exact: true }).waitFor()
+    await catalog.getByRole('option', { name: 'Fixture Anthropic model (fixture/anthropic-v1)', exact: true }).waitFor({ state: 'attached' })
     expect(await input.inputValue()).toBe(CUSTOM_MODEL)
     expect(await provider.locator('option').allTextContents()).toEqual([
       'OpenAI API', 'Anthropic API', 'OpenAI Subscription (Codex)', 'Anthropic Subscription (Claude Code)',
@@ -126,11 +137,26 @@ describe('web e2e: provider model suggestions with a manually editable ID', () =
     expect(saved[0]).toMatchObject({ name: CUSTOM_MODEL, model_name: CUSTOM_MODEL, provider_id: 'anthropic-api' })
     await settings.getByText(CUSTOM_MODEL, { exact: true }).waitFor()
     await openReasoning()
-    await catalog.getByRole('option', { name: 'Fixture Anthropic model (fixture/anthropic-v1)', exact: true }).waitFor()
+    await catalog.getByRole('option', { name: 'Fixture Anthropic model (fixture/anthropic-v1)', exact: true }).waitFor({ state: 'attached' })
     expect(await input.inputValue()).toBe(CUSTOM_MODEL)
     expect(await provider.inputValue()).toBe('anthropic-api')
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click()
+    const allocations = settings.getByRole('region', { name: 'Task Model Allocation', exact: true })
+    const main = allocations.getByRole('combobox', { name: 'Agent Execution', exact: true })
+    await expect.poll(() => main.inputValue()).toBe('reasoning')
+    expect(await allocations.getByRole('combobox').count()).toBe(8)
+    await main.selectOption('fast')
+    await allocations.getByText('Saved', { exact: true }).waitFor()
+    expect(taskModels['agent_execution']?.model_type).toBe('fast')
+    const srl = allocations.getByRole('combobox', { name: 'Semantic Role Labeling (SRL)', exact: true })
+    await srl.selectOption('reasoning')
+    await allocations.getByText('Saved', { exact: true }).waitFor()
+    expect(taskModels['srl']?.model_type).toBe('reasoning')
+    await compareOrRefreshGolden(join(EXPECTED, 'task-model-allocation.expected.md'), await captureStableAria(
+      page, 'section[aria-label="Task Model Allocation"]', scaffold.workspaceCwd,
+    ), MODE)
     expect(unexpected).toEqual([])
     expect(tripwire.pageErrors).toEqual([])
-    await assertFixtureInventory(EXPECTED, ['listed-model.expected.md', 'custom-provider.expected.md'])
+    await assertFixtureInventory(EXPECTED, ['listed-model.expected.md', 'custom-provider.expected.md', 'task-model-allocation.expected.md'])
   })
 })

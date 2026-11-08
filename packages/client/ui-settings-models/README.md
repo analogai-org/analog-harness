@@ -29,6 +29,8 @@ Desktop product events use the optional [product analytics service](../product-a
 
 Saving credentials or a custom provider preserves the selected model. The user can select an available model from the composer.
 
+**Task Model Allocation** exposes the same eight task stages as the Chat dashboard. Each dropdown selects the configured Reasoning or Fast model and saves immediately to the active Chat agent. **Agent Execution** determines the main model shown in the chat composer. Failed saves retain the previously saved value and allow retry; reopening Settings reads the allocations from Chat again.
+
 The model editor shows the selected provider's model list beside an editable **Model ID** field. Choosing a model copies its ID into the field; users can also type a custom ID. Loading, empty, or failed model listings keep the field editable. API-key connections use the labels **OpenAI API** and **Anthropic API**; subscription connections retain their existing names and sign-in flows.
 
 Each OpenAI subscription connection creates a separate provider row with its own account token. **Connect** signs in and shows the connected account email in the open dialog; it does not create a provider. **Add Provider** saves the signed-in account as a separate provider row. The row shows the connected account email and keeps **Edit** and **Delete** visible at narrow widths. Deleting the row removes its saved token; editing it keeps the account attached.

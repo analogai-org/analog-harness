@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 import { execSync } from 'node:child_process'
 import { desktopTargetBuildPaths, resolveDesktopBuildTarget } from './scripts/desktop-build-paths.mjs'
+import { requireChatBackend } from './scripts/chat-backend-path.mjs'
 
 const root = fileURLToPath(new URL('.', import.meta.url))
 const prebuiltChatPath = join(root, 'prebuilt/analog-chat-service')
@@ -66,11 +67,12 @@ if (!existsSync(runtimeTargetRoot)) {
   throw new Error(`[analog-builder] CRITICAL ERROR: runtime directory not found at ${runtimeTargetRoot}. You must run 'pnpm run prepare:analog' before packaging.`)
 }
 
-const resolvedChatPath = existsSync(prebuiltChatPath)
-  ? prebuiltChatPath
-  : (existsSync(chatServiceWinDistPath)
-    ? chatServiceWinDistPath
-    : (existsSync(chatServiceDistPath) ? chatServiceDistPath : (existsSync(chatMainDistPath) ? chatMainDistPath : undefined)))
+const resolvedChatPath = requireChatBackend([
+  prebuiltChatPath,
+  chatServiceDistPath,
+  ...(targetName === 'win-x64' ? [chatServiceWinDistPath] : []),
+  chatMainDistPath,
+], targetName)
 
 /** @type {import('electron-builder').Configuration} */
 const config = {
@@ -105,11 +107,11 @@ const config = {
       to: 'runtime',
       filter: ['**/*'],
     },
-    ...(resolvedChatPath ? [{
+    {
       from: resolvedChatPath,
       to: 'analog-chat-service',
       filter: ['**/*'],
-    }] : []),
+    },
     {
       from: join(root, 'resources/icon-windows.png'),
       to: 'icon.png',

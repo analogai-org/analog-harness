@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { pipeline } from 'node:stream/promises'
 import { Readable } from 'node:stream'
+import { resolveDesktopBuildTarget } from './desktop-build-paths.mjs'
+import { findChatBackend } from './chat-backend-path.mjs'
 
 const scriptDir = fileURLToPath(new URL('.', import.meta.url))
 const desktopRoot = resolve(scriptDir, '..')
@@ -16,23 +18,14 @@ const localChatDist = resolve(repoRoot, '../chat/dist/analog-chat-service')
 const localChatWinDist = resolve(repoRoot, '../chat/dist/analog-chat-service-win/analog-chat-service')
 
 export async function ensurePrebuiltChatBackend() {
-  const isWin = process.platform === 'win32'
+  const target = resolveDesktopBuildTarget()
+  const isWin = target === 'win-x64'
   const exeName = isWin ? 'analog-chat-service.exe' : 'analog-chat-service'
 
-  // 1. Check if locally compiled in chat/dist
-  if (existsSync(join(localChatDist, exeName))) {
-    console.log(`[fetch-backend] Found locally compiled chat backend in ${localChatDist}`)
-    return localChatDist
-  }
-  if (existsSync(join(localChatWinDist, exeName))) {
-    console.log(`[fetch-backend] Found locally compiled chat backend in ${localChatWinDist}`)
-    return localChatWinDist
-  }
-
-  // 2. Check if already downloaded in apps/desktop/prebuilt
-  if (existsSync(join(prebuiltChatDir, exeName))) {
-    console.log(`[fetch-backend] Found cached prebuilt chat backend in ${prebuiltChatDir}`)
-    return prebuiltChatDir
+  const existing = findChatBackend([prebuiltChatDir, localChatDist, ...(isWin ? [localChatWinDist] : [])], target)
+  if (existing) {
+    console.log(`[fetch-backend] Found chat backend in ${existing}`)
+    return existing
   }
 
   // 3. Determine target architecture
@@ -180,7 +173,7 @@ export async function ensurePrebuiltChatBackend() {
   } catch (err) {
     console.error(`[fetch-backend] Warning/Error fetching prebuilt backend: ${err.message}`)
     console.error(`[fetch-backend] You can manually build the chat microservice or download ${assetName} to ${prebuiltDir}`)
-    return null
+    throw err
   }
 }
 

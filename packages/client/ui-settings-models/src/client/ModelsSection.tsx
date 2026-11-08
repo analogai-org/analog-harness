@@ -2,12 +2,15 @@ import { useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { en } from './locales.ts'
 import { ProviderModelPicker } from './ProviderModelPicker.tsx'
+import { TaskModelAllocation } from './TaskModelAllocation.tsx'
 import { providerDisplayLabel } from './provider-labels.ts'
 import styles from './ModelsSection.module.css'
 
 export interface ModelsSectionInjected {
   /** The desktop shell opens sign-in in an external browser without a popup handle. */
   opensAuthExternally: boolean
+  /** Refresh model selectors after a committed Chat configuration change. */
+  modelsChanged?: () => void
   controller: any
   hooks: any
   operations: any
@@ -611,6 +614,7 @@ export function ModelsSection(_props?: ModelsSectionProps) {
 
       setModelModalOpen(false)
       await loadData()
+      _props?.modelsChanged?.()
     } catch (err: any) {
       setErrorMsg('Failed to save model: ' + (err?.message || 'Network error'))
     } finally {
@@ -785,6 +789,8 @@ export function ModelsSection(_props?: ModelsSectionProps) {
           </div>
         </div>
       </div>
+
+      <TaskModelAllocation agentId={activeAgentId} t={t} onChanged={_props?.modelsChanged} />
 
       {/* Add / Edit Provider Modal */}
       {providerModalOpen && (

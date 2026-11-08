@@ -12,7 +12,7 @@ import AgentRegistry, { installModelSelection } from '@deepseek-ai/dsh-agent'
 import type { Agent, ModelSelectionRef } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
@@ -28,7 +28,7 @@ import { object } from '../src/replay.ts'
 import { DeepSeekFileStore } from '../src/file-store.ts'
 import * as Messages from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import * as AccountProvider from '@deepseek-ai/dsh-llm-deepseek-account'
-import { adapter, assemble, chunks, MODEL, options, prepareExtensions, server, sse, textEvents, user, sourceModuleLoader } from './helpers.ts'
+import { adapter, assemble, chunks, end, MODEL, options, prepareExtensions, server, sse, start, textEvents, user, sourceModuleLoader } from './helpers.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => {
@@ -329,6 +329,58 @@ describe('Cordis provider composition', () => {
     await profileComposition(ctx, home, join(home, 'cordis.yml'))
     return { ctx, http }
   }
+
+  it.each(['deepseek-account', 'deepseek-official'])('keeps complete history across parallel and chained tool calls on %s', async (provider) => {
+    const { ctx, http } = await boot((response, count) => {
+      const names = count === 1 ? ['directory', 'platform'] : count === 2 ? ['directory'] : []
+      response.end(names.length === 0 ? sse(textEvents) : sse([
+        start,
+        ...names.flatMap((name, index) => [
+          { type: 'content_block_start', index, content_block: { type: 'tool_use', id: `call_${count}_${name}`, name, input: {} } },
+          { type: 'content_block_delta', index, delta: { type: 'input_json_delta', partial_json: '{}' } },
+          { type: 'content_block_stop', index },
+        ]),
+        ...end('tool_use'),
+      ]))
+    })
+    ctx.provide('deepseekAccount', { resolveToken: async (_url: string): Promise<string | undefined> => 'fixture-token' } as DeepSeekAccount)
+    const executions: string[] = []
+    for (const name of ['directory', 'platform']) {
+      ctx.effect(() => ctx.tools.register(defineContentToolFixture({
+        name, description: name, parameters: {},
+        async execute() {
+          executions.push(name)
+          return [{ type: 'text', text: `${name} result` }]
+        },
+      })))
+    }
+    ctx.on('system-prompt/assemble', async (_assembly, _context, next) => ({
+      ...await next(), sections: [{ name: 'test', text: 'Use tools to inspect the workspace.', order: 0 }],
+    }))
+    const agent = await ctx.agentLoop.create(SessionId('tool-history'), { provider, model: MODEL })
+    await send(agent, 'What is our current directory and platform?')
+
+    expect(executions).toEqual(['directory', 'platform', 'directory'])
+    expect(http.requests).toHaveLength(3)
+    for (const request of http.requests) {
+      expect(request.body.system).toContain('Use tools to inspect the workspace.')
+      expect(request.body.tools).toEqual(expect.arrayContaining([
+        expect.objectContaining({ name: 'directory' }), expect.objectContaining({ name: 'platform' }),
+      ]))
+    }
+    const initial = { role: 'user', content: [{ type: 'text', text: 'What is our current directory and platform?' }] }
+    const exchange = (round: number, names: string[]) => [
+      { role: 'assistant', content: names.map(name => ({ type: 'tool_use', id: `call_${round}_${name}`, name, input: {} })) },
+      { role: 'user', content: names.map(name => ({ type: 'tool_result', tool_use_id: `call_${round}_${name}`,
+        content: [{ type: 'text', text: `${name} result` }], is_error: false })) },
+    ]
+    expect(http.requests.map(request => request.body.messages)).toEqual([
+      [initial],
+      [initial, ...exchange(1, ['directory', 'platform'])],
+      [initial, ...exchange(1, ['directory', 'platform']), ...exchange(2, ['directory'])],
+    ])
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'tool/result')).toHaveLength(3)
+  })
 
   it.each(['deepseek-account', 'deepseek-official'].flatMap(provider => [
     { provider, body: JSON.stringify({ error: { type: 'authentication_error', message: 'API key is invalid' } }) },

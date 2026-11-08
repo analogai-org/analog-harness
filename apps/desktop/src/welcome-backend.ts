@@ -276,7 +276,7 @@ export async function connectDesktopWelcome(
         }
 
         // 6. Update Harness LLM Settings & credentials
-        const { settings, ref } = await settingsAndReference()
+        const { ref } = await settingsAndReference()
         if (ref !== undefined) {
           await invoke({ namespace: 'credentials', method: 'set', args: { ref, value: agentApiKey } })
         }
@@ -291,22 +291,6 @@ export async function connectDesktopWelcome(
             },
           },
         })
-
-        const defaultModelNs = settings.namespaces.find((item: unknown) => record(item) && item.ns === 'agent-default-model')
-        if (defaultModelNs !== undefined && params.fastModel) {
-          await invoke({
-            namespace: 'settings',
-            method: 'update',
-            args: {
-              ns: 'agent-default-model',
-              patch: {
-                model: params.fastModel,
-              },
-            },
-          }).catch((err) => {
-            console.warn('Could not update default model setting:', err)
-          })
-        }
 
         return { ok: true }
       } catch (error) {

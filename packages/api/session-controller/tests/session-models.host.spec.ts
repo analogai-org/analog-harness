@@ -688,6 +688,84 @@ describe('Web session model selection', () => {
     await ctx.fiber.dispose()
   })
 
+  it.each([false, true])('writes a Chat dropdown choice only to Chat (failed: %s)', async (failed) => {
+    const { ctx, sessionId } = await harness({ provider: 'deepseek-official', model: 'saved-old-model' })
+    onTestFinished(async () => { await ctx.fiber.dispose() })
+    vi.stubEnv('VITEST', '')
+    onTestFinished(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals() })
+    const saveDefault = vi.fn()
+    const send = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input.endsWith('/v1/models')) return Response.json({ data: [
+        { id: 'current-fast', provider: 'openai', type: 'fast' },
+        { id: 'current-main', provider: 'anthropic', type: 'reasoning' },
+      ] })
+      if (input.endsWith('/task-models')) return Response.json({ agent_execution: { model_type: 'reasoning' } })
+      if (input.endsWith('/task-models/agent_execution') && init?.method === 'PUT') {
+        return Response.json({ status: failed ? 'failed' : 'success' }, { status: failed ? 500 : 200 })
+      }
+      throw new Error(`Unexpected fixture request: ${input}`)
+    })
+    vi.stubGlobal('fetch', send)
+    const remote = createSessionTestRemote(ctx, {
+      cwd: '/tmp', defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'saved-old-model' }),
+      saveDefaultModelSelection: saveDefault,
+    })
+    const before = ctx.sessions.get(sessionId)?.seq
+    const result = await remote.selectModel({ sessionId, provider: 'openai', model: 'current-fast' })
+    expect(result.ok).toBe(!failed)
+    expect(currentSelection(ctx, sessionId).model).toBe('saved-old-model')
+    expect(ctx.sessions.get(sessionId)?.seq).toBe(before)
+    expect(send).toHaveBeenLastCalledWith('http://127.0.0.1:8071/v1/agents/default/task-models/agent_execution',
+      expect.objectContaining({ method: 'PUT', body: '{"model_type":"fast"}' }))
+    expect(saveDefault).not.toHaveBeenCalled()
+  })
+
+  it('uses Chat’s main model for the next prompt even when Session history saved another model', async () => {
+    const { ctx, sessionId, agent } = await harness({ provider: 'deepseek-official', model: 'gpt-6-luna' })
+    onTestFinished(async () => { await ctx.fiber.dispose() })
+    vi.stubEnv('VITEST', '')
+    onTestFinished(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals() })
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      if (input.endsWith('/v1/models')) return Response.json({ data: [
+        { id: 'current-fast', provider: 'openai', type: 'fast' },
+        { id: 'current-main', provider: 'anthropic', type: 'reasoning' },
+      ] })
+      if (input.endsWith('/task-models')) return Response.json({ agent_execution: { model_type: 'reasoning' } })
+      throw new Error(`Unexpected fixture request: ${input}`)
+    }))
+    const followup = vi.fn()
+    Object.assign(agent, { followup })
+    const remote = createSessionTestRemote(ctx, {
+      cwd: '/tmp', defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'gpt-6-luna' }),
+    })
+    const before = agent.session.seq
+    expect(await remote.prompt(promptRequest({
+      sessionId, mode: 'queue', content: [{ type: 'text', text: 'hello' }],
+    }))).toMatchObject({ ok: true, value: { accepted: true } })
+    expect(currentSelection(ctx, sessionId)).toEqual({ provider: 'deepseek-official', model: 'gpt-6-luna' })
+    expect(agent.session.seq).toBe(before)
+    expect((await ctx.systemPrompt.assemble()).variables).toMatchObject({ provider: 'deepseek-official', model: 'current-main' })
+    expect(followup).toHaveBeenCalledOnce()
+  })
+
+  it('does not use or save a Harness selection while Chat is unavailable', async () => {
+    const { ctx, sessionId } = await harness({ provider: 'deepseek-official', model: 'gpt-6-luna' })
+    onTestFinished(async () => { await ctx.fiber.dispose() })
+    vi.stubEnv('VITEST', '')
+    onTestFinished(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals() })
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Chat is offline')))
+    const saveDefault = vi.fn()
+    const remote = createSessionTestRemote(ctx, {
+      cwd: '/tmp', defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'gpt-6-luna' }),
+      saveDefaultModelSelection: saveDefault,
+    })
+    const before = ctx.sessions.get(sessionId)?.seq
+    expect(await remote.selectModel({ sessionId, provider: 'deepseek-official', model: 'deepseek-chat' }))
+      .toMatchObject({ ok: false, error: { code: 'session/model-unavailable' } })
+    expect(ctx.sessions.get(sessionId)?.seq).toBe(before)
+    expect(saveDefault).not.toHaveBeenCalled()
+  })
+
   it('admits saved selections without querying the advisory model catalog', async () => {
     const { ctx, sessionId, agent } = await harness()
     const followup = vi.fn()

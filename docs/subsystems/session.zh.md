@@ -764,7 +764,7 @@ interface TurnEndReasonMap {
 
 ## Remote 目录与 workspace 打开
 
-`ModelCatalog` 是 `session/modelCatalog` 返回的 Host generation 模型目录：它携带部署默认值、可路由 provider id、成功的 provider 分组与相互隔离的 provider 失败。它不由某个 Session 派生，因此与 Session projection 分开保存。
+`ModelCatalog` 是 `session/modelCatalog` 返回的模型目录：它携带部署默认值、可路由 provider id、成功的 provider 分组与相互隔离的 provider 失败。可选的 `active` 选择按智能体执行分配标识本地 Chat 微服务的主模型；选择器优先使用它而非已保存的会话选择。Chat 目录在显式打开选择器及配置失效时刷新。目录与持久化会话投影保持分离。
 
 `SessionOpenWorkspacePathRequest` 携带绝对路径或已按 workspace 解析的 `path`。`SessionOpenWorkspacePathValue` 确认 Host 已接受原生交接。Session-aware Client 会在已知当前 Session cwd 时据此解析相对路径；controller 将路径原样交给打开器，并通过 Session Remote 错误词汇表报告无效请求、取消与打开器失败。 可选的 `action: "reveal"` 选择文件管理器导航；省略时使用默认应用打开。
 
@@ -1295,4 +1295,20 @@ Awaited parallel durability checkpoint: every listener runs and the caller await
 Types: [Scoped](scope.zh.md)
 
 Source: [`packages/core/session/src/index.ts`](../../packages/core/session/src/index.ts)
+
+<a id="sessionmodel-catalog-invalidated--emit"></a>
+
+#### `session/model-catalog-invalidated` — emit
+
+A client edit committed to Chat's models or task allocations.
+
+```ts cordis-catalog
+/**
+ * A client edit committed to Chat's models or task allocations.
+ * @mode emit
+ */
+'session/model-catalog-invalidated'(): void
+```
+
+Source: [`packages/api/session-controller/src/types.ts`](../../packages/api/session-controller/src/types.ts)
 <!-- END GENERATED cordis-surface -->

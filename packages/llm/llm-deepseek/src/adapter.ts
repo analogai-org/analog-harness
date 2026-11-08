@@ -76,23 +76,8 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
     options: GenerateOptions, connection: C, signal: AbortSignal, activity: () => void,
   ): AsyncGenerator<StreamChunk> {
     signal.throwIfAborted()
-    // The chat microservice handles conversation history and memory internally.
-    // Send only the latest message turn (or consecutive trailing tool messages) from the harness.
-    let outgoingMessages = options.messages
-    if (options.messages.length > 0) {
-      const last = options.messages[options.messages.length - 1]!
-      if (last.role === 'tool') {
-        let i = options.messages.length - 1
-        while (i >= 0 && options.messages[i]!.role === 'tool') {
-          i--
-        }
-        outgoingMessages = options.messages.slice(i + 1)
-      } else {
-        outgoingMessages = [last]
-      }
-    }
     const { messages, versions } = await prepareImages(
-      outgoingMessages, connection, options.model, this.dependencies.resolveAttachments?.(), this.imageAccess, signal,
+      options.messages, connection, options.model, this.dependencies.resolveAttachments?.(), this.imageAccess, signal,
     )
     const auth = await this.dependencies.resolveAuth(connection)
     try {

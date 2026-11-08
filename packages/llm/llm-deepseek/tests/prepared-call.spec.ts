@@ -35,7 +35,7 @@ it.each([false, true])('uses Messages, schema=%s', async (schema) => {
   expect(http.requests[0]).toMatchObject({
     path: '/anthropic/v1/messages',
     headers: { 'x-api-key': 'key-for-DEEPSEEK_API_KEY', 'anthropic-version': '2023-06-01' },
-    body: { model: MODEL, messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }] },
+    body: { messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }] },
   })
 })
 

@@ -1,22 +1,23 @@
+"""Run a diagnostic command on the configured Windows VM over SSH."""
+
+import os
 import subprocess
 import sys
 
-def ssh_exec(cmd):
-    result = subprocess.run(
-        ["sshpass", "-p", "analog", "ssh", "-o", "StrictHostKeyChecking=no", "analog@34.78.2.175", cmd],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
-    )
-    return result.returncode, result.stdout.decode('utf-8', errors='replace'), result.stderr.decode('utf-8', errors='replace')
+
+def main() -> None:
+    target = os.environ.get("WINDOWS_SSH_TARGET")
+    if not target:
+        raise SystemExit("Set WINDOWS_SSH_TARGET to user@windows-vm.")
+    command = sys.argv[1:] or [
+        "powershell",
+        "-NoProfile",
+        "-Command",
+        "Get-Process node, electron-builder -ErrorAction SilentlyContinue | Format-Table Id, ProcessName, CPU, WorkingSet",
+    ]
+    result = subprocess.run(["ssh", target, *command], check=False)
+    raise SystemExit(result.returncode)
 
 
 if __name__ == "__main__":
-    cmd = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else 'powershell -NoProfile -Command "Get-Process node, electron-builder -ErrorAction SilentlyContinue | Format-Table Id, ProcessName, CPU, WorkingSet"'
-    code, out, err = ssh_exec(cmd)
-    print(f"=== EXIT CODE: {code} ===")
-    if out:
-        print("=== STDOUT ===")
-        print(out)
-    if err:
-        print("=== STDERR ===")
-        print(err)
+    main()

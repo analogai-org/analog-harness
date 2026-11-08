@@ -12,6 +12,16 @@ import type { SessionProjectionMap } from '@deepseek-ai/dsh-session-projection/t
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * A client edit committed to Chat's models or task allocations.
+     * @mode emit
+     */
+    'session/model-catalog-invalidated'(): void
+  }
+}
+
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionStateMap {
     /** Host state persisted for cold Session list summaries. */
@@ -157,6 +167,8 @@ export interface ModelCatalogFailure {
 /** Host-generation model catalog and the default used by unconfigured Sessions. */
 export interface ModelCatalog {
   readonly default: ModelSelection
+  /** Chat's main model; null means Chat has no available selection. Omission identifies other catalog sources. */
+  readonly active?: ModelSelection | null
   /** Provider routes with at least one currently available catalog model. */
   readonly routableProviders: readonly string[]
   readonly groups: readonly ModelProviderGroup[]

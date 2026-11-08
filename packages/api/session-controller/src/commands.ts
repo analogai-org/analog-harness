@@ -1,6 +1,7 @@
 /** Session commands whose activation policy is explicit at each Remote method. */
 
-import { modelAvailable } from './catalog.ts'
+import { buildModelCatalog, modelAvailable } from './catalog.ts'
+import { readChatModels, selectChatMainModel } from './chat-models.ts'
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -144,11 +145,22 @@ export class SessionCommandController {
   }
 
   /**
-   * Validate and install one Session-local model selection; save the default in the background.
+   * Save Chat model choices only through Chat; other deployments install a Session-local selection.
    * @param request - Session identity and requested model selection.
-   * @returns the normalized selection installed for the Session, without waiting for default persistence.
+   * @returns Chat's committed model choice, or the Session selection for non-Chat deployments.
    */
   async selectModel(request: SessionSelectModelRequest): Promise<SessionSelectModelValue> {
+    const catalog = await buildModelCatalog(this.ctx)
+    if (catalog.active !== undefined) {
+      try {
+        if (catalog.active === null) throw new Error('Chat model configuration is unavailable')
+        await selectChatMainModel(request)
+        return { selected: { provider: request.provider, model: request.model } }
+      } catch (error) {
+        throw new RemoteError('session/model-unavailable', error instanceof Error ? error.message : String(error),
+          { provider: request.provider, model: request.model })
+      }
+    }
     const agent = await this.resolveAgent(request.sessionId)
     return this.agents.serializeImageAdmission(agent, async () => {
       try {
@@ -336,6 +348,13 @@ export class SessionCommandController {
     const hasImage = request.content.some(part => part.type === 'image')
     const admit = async (): Promise<SessionPromptValue> => {
       try {
+        const chat = await readChatModels()
+        if (chat !== null) {
+          const current = this.agents.selectionFor(agent).current
+          if (current.provider !== 'deepseek-official' || current.model !== chat.active.model) {
+            this.agents.selectionFor(agent).current = { provider: 'deepseek-official', model: chat.active.model }
+          }
+        }
         if (hasImage) {
           const current = this.agents.selectionFor(agent).current
           const model = await this.ctx.llm.resolveModelInfo(current.provider, current.model)

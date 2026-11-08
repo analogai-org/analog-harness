@@ -760,7 +760,7 @@ The backends that consume this contract are on [persistence.md](persistence.md).
 
 ## Remote catalog and workspace opening
 
-`ModelCatalog` is the Host-generation model directory returned by `session/modelCatalog`: it carries the deployment default, routable provider ids, successful provider groups, and isolated provider failures. It is not derived from one Session and remains separate from Session projections.
+`ModelCatalog` is the model directory returned by `session/modelCatalog`: it carries the deployment default, routable provider ids, successful provider groups, and isolated provider failures. Its optional `active` selection identifies the local Chat microservice's main model from the Agent Execution allocation; selectors prefer it over saved Session selections. Chat-backed catalogs refresh on explicit picker reads and configuration invalidations. The directory remains separate from durable Session projections.
 
 `SessionOpenWorkspacePathRequest` carries an absolute or workspace-resolved `path`; optional `action: "reveal"` selects file-manager navigation instead of default-application opening. `SessionOpenWorkspacePathValue` confirms that the Host accepted the native handoff. A Session-aware Client resolves relative paths against its current Session cwd when known; the controller hands the path to the opener unchanged and reports invalid requests, cancellation, and opener failures through the Session Remote error vocabulary.
 
@@ -1291,4 +1291,20 @@ Awaited parallel durability checkpoint: every listener runs and the caller await
 Types: [Scoped](scope.md)
 
 Source: [`packages/core/session/src/index.ts`](../../packages/core/session/src/index.ts)
+
+<a id="sessionmodel-catalog-invalidated--emit"></a>
+
+#### `session/model-catalog-invalidated` — emit
+
+A client edit committed to Chat's models or task allocations.
+
+```ts cordis-catalog
+/**
+ * A client edit committed to Chat's models or task allocations.
+ * @mode emit
+ */
+'session/model-catalog-invalidated'(): void
+```
+
+Source: [`packages/api/session-controller/src/types.ts`](../../packages/api/session-controller/src/types.ts)
 <!-- END GENERATED cordis-surface -->

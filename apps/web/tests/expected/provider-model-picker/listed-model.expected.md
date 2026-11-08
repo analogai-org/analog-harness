@@ -1,0 +1,20 @@
+- dialog "Edit Reasoning Model":
+  - heading "Edit Reasoning Model" [level=2]
+  - button "Close"
+  - text: Provider
+  - combobox:
+    - option "OpenAI API" [selected]
+    - option "Anthropic API"
+    - option "OpenAI Subscription (Codex)"
+    - option "Anthropic Subscription (Claude Code)"
+  - text: Available models
+  - combobox "Available models":
+    - option "Choose a model…"
+    - option "Fixture OpenAI model (fixture/openai-v1)" [selected]
+  - text: Model ID
+  - textbox "Model ID": fixture/openai-v1
+  - status
+  - text: Max Tokens (Optional)
+  - spinbutton
+  - button "Cancel"
+  - button "Save Model"

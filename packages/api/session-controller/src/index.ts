@@ -282,9 +282,9 @@ export class SessionController extends TypertRemoteService {
   }
 
   /**
-   * Select one Session-local model after explicitly resuming the Session; save the default in the background.
+   * Save Chat's main model without activating or writing a Session; other deployments use Session-local selection.
    * @param request - Session identity and requested model selection.
-   * @returns the normalized selection installed for the Session, without waiting for default persistence.
+   * @returns the committed Chat model or the normalized non-Chat Session selection.
    */
   @Remote('selectModel')
   selectModel(request: SessionSelectModelRequest): Promise<SessionSelectModelValue> {
@@ -292,14 +292,15 @@ export class SessionController extends TypertRemoteService {
   }
 
   /**
-   * Select the first available account model after login when no provider API key is configured.
-   * @returns after saving the first available model or retaining the existing default.
+   * Keep Chat model configuration unchanged; other deployments may initialize an account default after login.
+   * @returns without a Harness model write for Chat, otherwise after default initialization or retention.
    */
   @Remote
   async initializeDefaultModel(): Promise<void> {
+    const catalog = await buildModelCatalog(this.ctx)
+    if (catalog.active !== undefined) return
     const provider = 'deepseek-account'
     if (await hasProviderApiKey(this.ctx)) return
-    const catalog = await buildModelCatalog(this.ctx)
     const model = catalog.groups.find(group => group.id === provider)?.models[0]
     if (model === undefined) throw new RemoteError('session/provider-models-unavailable',
       `provider "${provider}" has no available models`, { provider })

@@ -12,6 +12,7 @@
     "src/agent.ts",
     "src/assistant-stream.ts",
     "src/catalog.ts",
+    "src/chat-models.ts",
     "src/commands.ts",
     "src/control.ts",
     "src/file-references.ts",

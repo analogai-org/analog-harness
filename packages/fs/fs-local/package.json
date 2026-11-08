@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-fs-local",
   "description": "Local-filesystem implementation of the AnalogAI Harness filesystem seam (ctx.fs)",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "publishConfig": {
     "access": "public"
   },

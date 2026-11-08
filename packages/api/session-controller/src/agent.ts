@@ -7,6 +7,7 @@ import type {
   Agent, AgentOptions, AgentSetup, ModelSelection as AgentModelSelection, ModelSelectionRef,
 } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
+import { readChatModels } from './chat-models.ts'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
@@ -276,7 +277,7 @@ export class ApiSessionAgentController {
   }
 
   /**
-   * Install or return the Session-local model selection used by prompt assembly.
+   * Install or return routing state used by prompt assembly. Chat steps refresh their model from Chat without saving a selection.
    * @param agent - live Agent that owns the selection.
    * @returns the installed mutable selection reference.
    */
@@ -322,6 +323,11 @@ export class ApiSessionAgentController {
       },
       assembled: undefined,
     }
+    agent.ctx.on('system-prompt/assemble', async (_assembly, _context, next) => {
+      const chat = await readChatModels()
+      if (chat !== null) picked = { provider: 'deepseek-official', model: chat.active.model }
+      return next()
+    }, { prepend: true })
     installModelSelection(agent.ctx, selection)
     this.selections.set(agent, selection)
     return selection

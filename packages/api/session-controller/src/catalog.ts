@@ -5,26 +5,12 @@ import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-settings'
 import type { LlmModelInfo } from '@deepseek-ai/dsh-llm'
 import type { Context } from '@deepseek-ai/cordis'
+import { readChatModels } from './chat-models.ts'
 import type {
   ModelCatalog,
   ModelReasoning,
   ModelSelection,
 } from './types.ts'
-
-const CHAT_MICROSERVICE_URLS = [
-  'http://127.0.0.1:8071/v1/models',
-  'http://localhost:8071/v1/models',
-]
-
-interface MicroserviceModel {
-  id: string
-  object?: string
-  provider?: string
-  owned_by?: string
-  type?: string
-  max_tokens?: number
-  temperature?: number | null
-}
 
 function formatProviderName(provider: string): string {
   const map: Record<string, string> = {
@@ -50,29 +36,6 @@ function formatProviderName(provider: string): string {
   return map[lower] || provider.charAt(0).toUpperCase() + provider.slice(1)
 }
 
-async function fetchMicroserviceModels(): Promise<MicroserviceModel[] | null> {
-  if (process.env.VITEST) {
-    return null
-  }
-  for (const url of CHAT_MICROSERVICE_URLS) {
-    try {
-      const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), 1500)
-      const res = await fetch(url, { signal: controller.signal })
-      clearTimeout(timer)
-      if (res.ok) {
-        const body = (await res.json()) as { data?: MicroserviceModel[] }
-        if (Array.isArray(body?.data) && body.data.length > 0) {
-          return body.data
-        }
-      }
-    } catch {
-      // ignore and try next URL or fallback
-    }
-  }
-  return null
-}
-
 /**
  * Build the browser model catalog without requiring a Session.
  * @param ctx - Host context carrying the live LLM registry.
@@ -83,8 +46,9 @@ export async function buildModelCatalog(
   ctx: Context,
   defaultSelection: ModelSelection = ctx.agentDefaultModel?.currentSelection ? ctx.agentDefaultModel.currentSelection() : { provider: '', model: '' },
 ): Promise<ModelCatalog> {
-  const microserviceModels = await fetchMicroserviceModels()
-  if (microserviceModels && microserviceModels.length > 0) {
+  const chat = await readChatModels()
+  if (chat !== null) {
+    const microserviceModels = chat.models
     const providerMap = new Map<
       string,
       {
@@ -100,63 +64,31 @@ export async function buildModelCatalog(
     >()
 
     for (const m of microserviceModels) {
-      const providerId = (m.provider || m.owned_by || 'custom').toLowerCase()
+      const providerId = m.provider
       const providerName = formatProviderName(providerId)
-      if (!providerMap.has(providerId)) {
-        providerMap.set(providerId, {
+      let group = providerMap.get(providerId)
+      if (group === undefined) {
+        group = {
           id: providerId,
           name: providerName,
           models: [],
-        })
+        }
+        providerMap.set(providerId, group)
       }
-      const group = providerMap.get(providerId)!
-      const lowerId = m.id.toLowerCase()
-      const isReasoning =
-        m.type === 'reasoning' ||
-        lowerId.includes('reasoner') ||
-        lowerId.includes('o1') ||
-        lowerId.includes('o3') ||
-        lowerId.includes('r1')
-      const isFast =
-        m.type === 'fast' ||
-        lowerId.includes('mini') ||
-        lowerId.includes('flash') ||
-        lowerId.includes('haiku') ||
-        lowerId.includes('chat')
-
-      const description = m.type === 'reasoning' ? 'Reasoning' : m.type === 'fast' ? 'Fast' : isReasoning ? 'Reasoning' : isFast ? 'Fast' : undefined
+      const description = m.type === 'reasoning' ? 'Reasoning' : 'Fast'
 
       group.models.push({
         id: m.id,
         name: m.id,
-        ...(description ? { description } : {}),
+        description,
       })
     }
 
     const groups = Array.from(providerMap.values()).filter(g => g.models.length > 0)
     if (groups.length > 0) {
-      let matchingGroup = groups.find(g => (g.id === defaultSelection?.provider || !defaultSelection?.provider) && g.models.some(m => m.id === defaultSelection?.model))
-      let matchingModel = matchingGroup?.models.find(m => m.id === defaultSelection?.model)
-
-      if (!matchingGroup && defaultSelection?.model) {
-        matchingGroup = groups.find(g => g.models.some(m => m.id === defaultSelection?.model))
-        matchingModel = matchingGroup?.models.find(m => m.id === defaultSelection?.model)
-      }
-
-      let effectiveDefault = defaultSelection
-      if (matchingGroup && matchingModel) {
-        effectiveDefault = {
-          provider: matchingGroup.id,
-          model: matchingModel.id,
-        }
-      } else if (groups[0] && groups[0].models[0]) {
-        effectiveDefault = {
-          provider: groups[0].id,
-          model: groups[0].models[0].id,
-        }
-      }
       return {
-        default: { ...effectiveDefault },
+        default: { ...chat.active },
+        active: { ...chat.active },
         routableProviders: groups.map(group => group.id),
         groups,
         failures: [],
@@ -168,6 +100,7 @@ export async function buildModelCatalog(
   if (!process.env.VITEST) {
     return {
       default: { provider: '', model: '' },
+      active: null,
       routableProviders: [],
       groups: [],
       failures: [],
@@ -186,15 +119,15 @@ export async function buildModelCatalog(
               resolved.reasoning === undefined
                 ? undefined
                 : {
-                    efforts: resolved.reasoning.efforts.map(effort => ({
-                      id: effort.id,
-                      name: effort.name,
-                      ...(effort.description === undefined ? {} : { description: effort.description }),
-                    })),
-                    ...(resolved.reasoning.defaultEffort === undefined
-                      ? {}
-                      : { defaultEffort: resolved.reasoning.defaultEffort }),
-                  }
+                  efforts: resolved.reasoning.efforts.map(effort => ({
+                    id: effort.id,
+                    name: effort.name,
+                    ...(effort.description === undefined ? {} : { description: effort.description }),
+                  })),
+                  ...(resolved.reasoning.defaultEffort === undefined
+                    ? {}
+                    : { defaultEffort: resolved.reasoning.defaultEffort }),
+                }
             return {
               id: model.id,
               name: model.name,
@@ -237,17 +170,13 @@ export async function buildModelCatalog(
  * @returns whether the exact model is currently advertised as available.
  */
 export async function modelAvailable(ctx: Context, selection: ModelSelection): Promise<boolean> {
-  const microserviceModels = await fetchMicroserviceModels()
+  const microserviceModels = (await readChatModels())?.models
   if (microserviceModels && microserviceModels.length > 0) {
-    const found = microserviceModels.some(m => {
-      const p = (m.provider || m.owned_by || '').toLowerCase()
-      return (
-        (p === selection.provider.toLowerCase() || !selection.provider) &&
-        m.id === selection.model
-      )
-    }) || microserviceModels.some(m => m.id === selection.model)
-    if (found) return true
+    return microserviceModels.some(model => model.provider === selection.provider.toLowerCase()
+      && model.id === selection.model)
   }
+
+  if (!process.env.VITEST) return false
 
   if (!ctx.llm.listProviders().some(provider => provider.id === selection.provider)) return false
   let models: readonly LlmModelInfo[]

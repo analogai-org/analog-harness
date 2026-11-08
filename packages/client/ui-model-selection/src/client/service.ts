@@ -55,6 +55,12 @@ export class ModelDirectoryResolver extends Service {
     ctx.remote.$on('settings/document-updated', () => { this.catalog.refresh() })
     ctx.remote.$on('credentials/record-updated', () => { this.catalog.refresh() })
     ctx.remote.$on('credentials/reference-updated', () => { this.catalog.refresh() })
+    ctx.on('session/model-catalog-invalidated', () => { this.catalog.refresh() })
+    if (typeof window !== 'undefined') ctx.effect(() => {
+      const refresh = (): void => { this.catalog.refresh() }
+      window.addEventListener('focus', refresh)
+      return () => { window.removeEventListener('focus', refresh) }
+    }, 'ui-model-selection: refresh after returning from Chat settings')
   }
 
   /**

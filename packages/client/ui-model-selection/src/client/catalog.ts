@@ -1,4 +1,4 @@
-/** One Host-generation model catalog shared by every Session selector. */
+/** Available model catalog shared by every Session selector, including Chat's live main selection. */
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ModelCatalog, ModelSelection, ModelProviderGroup } from '@deepseek-ai/dsh-api-remotes/client'
@@ -11,7 +11,7 @@ export interface ModelCatalogState {
   error: string | null
 }
 
-/** Loads at most one model catalog for the current Host generation. */
+/** Coalesces catalog reads and refreshes Chat allocations within the current Host generation. */
 export class ModelCatalogDirectory {
   /** Current shared catalog value and load lifecycle. */
   readonly store: SnapshotStore<ModelCatalogState> = createSnapshotStore({
@@ -42,11 +42,12 @@ export class ModelCatalogDirectory {
 
   /**
    * Return the current generation's catalog, sharing its one in-flight load.
+   * @param refresh - refetch a Chat-backed catalog even if this Host generation already loaded it.
    * @returns the loaded global catalog.
    */
-  load(): Promise<ModelCatalog> {
+  load(refresh = false): Promise<ModelCatalog> {
     const state = this.store.getSnapshot()
-    if (state.status === 'ready' && state.value !== null) return Promise.resolve(state.value)
+    if (state.status === 'ready' && state.value !== null && (!refresh || state.value.active === undefined)) return Promise.resolve(state.value)
     if (this.inflight !== undefined) return this.inflight
     const generation = this.generation
     this.store.update((draft) => {
