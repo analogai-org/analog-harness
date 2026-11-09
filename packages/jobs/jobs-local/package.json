@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-jobs-local",
   "description": "Process-local implementation of the AnalogAI Harness background job registry seam",
-  "version": "0.3.29",
+  "version": "0.3.30",
   "publishConfig": {
     "access": "public"
   },
