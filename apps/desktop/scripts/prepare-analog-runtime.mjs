@@ -41,7 +41,7 @@ run(pnpmCmd, ['--dir', 'native/system/packages/entry', 'pack', '--pack-destinati
 // 4. prepare:packages (unpack tarballs into package-set)
 run(pnpmCmd, ['run', 'prepare:packages'], desktopRoot)
 // Reclaim space by cleaning packed tarballs
-rmSync(buildPaths.packed, { recursive: true, force: true })
+rmSync(join(buildPaths.root, 'packed'), { recursive: true, force: true })
 
 // 5. prepare:runtime
 run(pnpmCmd, ['run', 'prepare:runtime'], desktopRoot)
