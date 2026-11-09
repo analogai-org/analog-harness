@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-goal",
   "description": "Model-facing same-session goal tools with execution-time authority checks",
-  "version": "0.3.32",
+  "version": "0.3.33",
   "publishConfig": {
     "access": "public"
   },

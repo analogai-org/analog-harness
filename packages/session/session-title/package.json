@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-session-title",
   "description": "Log-backed session title service and provider registry for the AnalogAI Harness",
-  "version": "0.3.32",
+  "version": "0.3.33",
   "publishConfig": {
     "access": "public"
   },

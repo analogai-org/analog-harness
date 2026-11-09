@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-bash-local",
   "description": "Local-subprocess implementation of the AnalogAI Harness bash executor seam",
-  "version": "0.3.32",
+  "version": "0.3.33",
   "publishConfig": {
     "access": "public"
   },
