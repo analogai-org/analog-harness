@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-host-directory-picker-native",
   "description": "Native-OS-chooser backend of the directory-picker seam for the AnalogAI Harness web GUI host",
-  "version": "0.3.23",
+  "version": "0.3.24",
   "publishConfig": {
     "access": "public"
   },
