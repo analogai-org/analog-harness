@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-brand",
   "description": "Stateless branded primitive types for the AnalogAI Harness",
-  "version": "0.3.30",
+  "version": "0.3.31",
   "publishConfig": {
     "access": "public"
   },

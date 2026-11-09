@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-ptc-runtime",
   "description": "Abstract PTC execution seam (ctx.ptcRuntime) for the AnalogAI Harness",
-  "version": "0.3.30",
+  "version": "0.3.31",
   "publishConfig": {
     "access": "public"
   },
