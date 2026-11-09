@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-session-persistence-jsonl",
   "description": "JSONL durable session persistence backend for the AnalogAI Harness",
-  "version": "0.3.20",
+  "version": "0.3.21",
   "publishConfig": {
     "access": "public"
   },
