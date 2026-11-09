@@ -2,7 +2,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { cp } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -136,6 +136,7 @@ export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOption
       cpSync(join(nodeSource, ...(target === 'win-x64' ? ['node.exe'] : ['bin', 'node'])),
         join(dependencies, 'node', 'bin', target === 'win-x64' ? 'node.exe' : 'node'))
       cpSync(join(nodeSource, 'LICENSE'), join(dependencies, 'node', 'LICENSE'))
+      rmSync(unpackedNode, { recursive: true, force: true })
       const require = createRequire(import.meta.url)
       const pnpmManifest = require.resolve('pnpm')
       pnpmVersion = (JSON.parse(readFileSync(pnpmManifest, 'utf8')) as { version: string }).version
@@ -156,9 +157,10 @@ export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOption
       await unpackPrimaryRuntimeWheel(await downloadPrimaryRuntimeAsset(wheel.url, wheel.sha256, paths.downloads), entries.pythonPackages)
     }
     writeFileSync(join(output, 'runtime.json'), `${JSON.stringify(manifest, undefined, 2)}\n`)
+    rmSync(paths.downloads, { recursive: true, force: true })
     const destination = join(paths.runtime, 'primary-runtime')
     rmSync(destination, { recursive: true, force: true })
-    await cp(output, destination, { recursive: true, dereference: true })
+    renameSync(output, destination)
   } finally {
     rmSync(staging, { recursive: true, force: true })
   }
