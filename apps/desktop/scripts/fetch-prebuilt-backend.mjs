@@ -47,8 +47,13 @@ export async function ensurePrebuiltChatBackend() {
   }
 
   const assetName = `analog-chat-service-${targetKey}.${ext}`
-  const tag = process.env.ANALOG_CHAT_TAG || 'latest'
-  const token = process.env.GH_PAT || process.env.ANALOG_CI_PAT || process.env.GITHUB_TOKEN
+  const tag = process.env.ANALOG_CHAT_TAG || process.env.RELEASE_TAG || 'latest'
+  let token = process.env.GH_PAT || process.env.ANALOG_CI_PAT || process.env.GITHUB_TOKEN
+  if (!token) {
+    try {
+      token = execFileSync('gh', ['auth', 'token'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    } catch {}
+  }
 
   console.log(`[fetch-backend] Downloading prebuilt backend asset '${assetName}' (tag: ${tag}) from analogai-org/chat...`)
 

@@ -87,7 +87,8 @@ python -m pip install poetry Cython pyinstaller
   tar -czf "$build_root/artifacts/analog-chat-service-mac-arm64.tar.gz" -C dist analog-chat-service
 )
 gh release upload "$RELEASE_TAG" "$build_root/artifacts/analog-chat-service-mac-arm64.tar.gz" --repo "$CHAT_REPO"
-rm -rf "$build_root/chat" "$build_root/artifacts"
+rm -rf "$build_root/chat/.venv" "$build_root/chat/build" "$build_root/chat/cython_staging" "$build_root/artifacts"
+export RELEASE_TAG="$RELEASE_TAG"
 (
   cd "$build_root/analog-harness"
   pnpm install --frozen-lockfile
@@ -95,6 +96,7 @@ rm -rf "$build_root/chat" "$build_root/artifacts"
   pnpm --dir apps/desktop run prepare:analog
   pnpm --dir apps/desktop exec electron-builder --config analog-builder.config.mjs --mac --arm64 --publish never
 )
+rm -rf "$build_root/chat"
 mac_output="$build_root/analog-harness/apps/desktop/release-builds"
 node "$build_root/analog-harness/apps/desktop/scripts/smoke-chat-backend.mjs" "$mac_output/mac-arm64/Analog.app/Contents/Resources/analog-chat-service/analog-chat-service"
 mac_files=("$mac_output/Analog-$RELEASE_VERSION-mac-arm64.dmg" "$mac_output/Analog-$RELEASE_VERSION-mac-arm64.zip")
