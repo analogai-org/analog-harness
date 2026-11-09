@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-util-values",
   "description": "Duplicate-install-safe value primitives for the AnalogAI Harness",
-  "version": "0.3.28",
+  "version": "0.3.29",
   "publishConfig": {
     "access": "public"
   },

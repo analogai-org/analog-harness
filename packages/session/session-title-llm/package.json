@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-session-title-llm",
   "description": "Shared LLM generation policy for AnalogAI Harness session-title providers",
-  "version": "0.3.28",
+  "version": "0.3.29",
   "publishConfig": {
     "access": "public"
   },

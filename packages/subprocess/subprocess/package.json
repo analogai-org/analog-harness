@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-subprocess",
   "description": "Subprocess seam (ctx.subprocess) for the AnalogAI Harness — managed process groups, bounded spill-backed output, and escalated kills behind one abstract service",
-  "version": "0.3.28",
+  "version": "0.3.29",
   "publishConfig": {
     "access": "public"
   },
