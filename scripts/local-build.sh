@@ -87,7 +87,7 @@ python -m pip install poetry Cython pyinstaller
   tar -czf "$build_root/artifacts/analog-chat-service-mac-arm64.tar.gz" -C dist analog-chat-service
 )
 gh release upload "$RELEASE_TAG" "$build_root/artifacts/analog-chat-service-mac-arm64.tar.gz" --repo "$CHAT_REPO"
-rm -rf "$build_root/chat/.venv" "$build_root/chat/build" "$build_root/chat/cython_staging"
+rm -rf "$build_root/chat" "$build_root/artifacts"
 (
   cd "$build_root/analog-harness"
   pnpm install --frozen-lockfile
