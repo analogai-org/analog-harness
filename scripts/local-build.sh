@@ -142,7 +142,7 @@ try {
     }
     $vcvars = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
     if (Test-Path $vcvars) {
-        $lines = cmd.exe /c "`"$vcvars`" && set"
+        $lines = cmd.exe /c ('"' + $vcvars + '" && set')
         foreach ($line in $lines) {
             $idx = $line.IndexOf('=')
             if ($idx -gt 0) {
