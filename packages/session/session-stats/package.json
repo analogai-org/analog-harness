@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-session-stats",
   "description": "Whole-log conversation counts and wall times projection (sessionStats) for the AnalogAI Harness",
-  "version": "0.3.25",
+  "version": "0.3.26",
   "publishConfig": {
     "access": "public"
   },

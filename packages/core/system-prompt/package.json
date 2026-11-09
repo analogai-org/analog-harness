@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-system-prompt",
   "description": "System prompt assembly registry for the AnalogAI Harness",
-  "version": "0.3.25",
+  "version": "0.3.26",
   "publishConfig": {
     "access": "public"
   },

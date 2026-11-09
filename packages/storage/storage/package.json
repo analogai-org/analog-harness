@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-storage",
   "description": "Storage hub (ctx.storage): named backend registry plus mounted data-form facilities for the AnalogAI Harness",
-  "version": "0.3.25",
+  "version": "0.3.26",
   "publishConfig": {
     "access": "public"
   },
