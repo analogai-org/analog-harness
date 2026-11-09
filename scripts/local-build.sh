@@ -140,12 +140,25 @@ try {
         git -C $destination checkout --detach $argsList[$i + 2]
         if ($LASTEXITCODE) { throw 'Checkout failed' }
     }
+    $vcvars = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+    if (Test-Path $vcvars) {
+        $lines = cmd.exe /c "`"$vcvars`" && set"
+        foreach ($line in $lines) {
+            $idx = $line.IndexOf('=')
+            if ($idx -gt 0) {
+                $k = $line.Substring(0, $idx)
+                $v = $line.Substring($idx + 1)
+                [System.Environment]::SetEnvironmentVariable($k, $v, 'Process')
+            }
+        }
+    }
+    $env:DISTUTILS_USE_SDK = '1'
     Set-Location (Join-Path $work 'chat')
     py -3.12 -m venv .venv
     if ($LASTEXITCODE) { throw 'venv creation failed' }
     $env:VIRTUAL_ENV = Join-Path (Get-Location) '.venv'
     $env:PATH = (Join-Path $env:VIRTUAL_ENV 'Scripts') + ';' + $env:PATH
-    python -m pip install poetry Cython pyinstaller
+    python -m pip install setuptools wheel pybind11 numpy poetry Cython pyinstaller
     if ($LASTEXITCODE) { throw 'Build dependency installation failed' }
     python -m poetry install --no-root --no-interaction
     if ($LASTEXITCODE) { throw 'Chat dependency installation failed' }
