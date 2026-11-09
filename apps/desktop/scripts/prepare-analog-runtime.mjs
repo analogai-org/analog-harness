@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { desktopTargetBuildPaths, resolveDesktopBuildTarget } from './desktop-build-paths.mjs'
@@ -38,13 +38,17 @@ run(pnpmCmd, ['run', 'release:pack', '--family', 'vendor', '--out', buildPaths.p
 run(pnpmCmd, ['--dir', 'native/system', 'run', 'build:ts'], repoRoot)
 run(pnpmCmd, ['--dir', 'native/system/packages/entry', 'pack', '--pack-destination', buildPaths.packedLandlock], repoRoot)
 
-// 4. prepare:runtime
+// 4. prepare:packages (unpack tarballs into package-set)
+run(pnpmCmd, ['run', 'prepare:packages'], desktopRoot)
+// Reclaim space by cleaning packed tarballs
+rmSync(buildPaths.packed, { recursive: true, force: true })
+
+// 5. prepare:runtime
 run(pnpmCmd, ['run', 'prepare:runtime'], desktopRoot)
 
-// 5. prepare:packages
-run(pnpmCmd, ['run', 'prepare:packages'], desktopRoot)
-
-// 6. prepare:dsh
+// 6. prepare:dsh (install runtime from package-set)
 run(pnpmCmd, ['run', 'prepare:dsh'], desktopRoot)
+// Reclaim space by cleaning package-set
+rmSync(buildPaths.packageSet, { recursive: true, force: true })
 
 console.log(`[prepare-analog] Runtime preparation successfully completed for ${targetName}!`)
