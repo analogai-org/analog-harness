@@ -131,10 +131,12 @@ try {
     $env:DSH_DESKTOP_TARGET_PLATFORM = 'win32'
     $env:DSH_DESKTOP_TARGET_ARCH = 'x64'
     $env:CSC_IDENTITY_AUTO_DISCOVERY = 'false'
+    git config --global core.longpaths true
     for ($i = 4; $i -lt $argsList.Count; $i += 3) {
         $destination = Join-Path $work $argsList[$i]
-        gh repo clone $argsList[$i + 1] $destination
+        gh repo clone $argsList[$i + 1] $destination -- --config core.longpaths=true
         if ($LASTEXITCODE) { throw 'Clone failed' }
+        git -C $destination config core.longpaths true
         git -C $destination checkout --detach $argsList[$i + 2]
         if ($LASTEXITCODE) { throw 'Checkout failed' }
     }
