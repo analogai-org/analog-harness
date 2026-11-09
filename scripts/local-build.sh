@@ -57,12 +57,8 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-mkdir "$build_root/tmp" "$build_root/cache" "$build_root/artifacts"
+mkdir "$build_root/tmp" "$build_root/artifacts"
 export TMPDIR="$build_root/tmp" TMP="$build_root/tmp" TEMP="$build_root/tmp"
-export PIP_CACHE_DIR="$build_root/cache/pip" POETRY_CACHE_DIR="$build_root/cache/poetry"
-export ELECTRON_CACHE="$build_root/cache/electron" ELECTRON_BUILDER_CACHE="$build_root/cache/builder"
-export npm_config_cache="$build_root/cache/npm" XDG_CACHE_HOME="$build_root/cache"
-export PYINSTALLER_CONFIG_DIR="$build_root/cache/pyinstaller" npm_config_devdir="$build_root/cache/node-gyp"
 export POETRY_VIRTUALENVS_CREATE=false APP_VERSION="$RELEASE_VERSION"
 export DSH_DESKTOP_APP_ID=ai.analog.desktop CSC_IDENTITY_AUTO_DISCOVERY=false
 export DSH_DESKTOP_TARGET_PLATFORM=darwin DSH_DESKTOP_TARGET_ARCH=arm64
@@ -70,7 +66,7 @@ export DSH_DESKTOP_TARGET_PLATFORM=darwin DSH_DESKTOP_TARGET_ARCH=arm64
 remote_args=()
 for ((i=0; i<${#source_repos[@]}; i++)); do
   commit=$(git -C "${source_repos[i]}" rev-parse HEAD)
-  git clone --no-hardlinks --no-checkout "${source_repos[i]}" "$build_root/${source_names[i]}"
+  git clone --no-checkout "${source_repos[i]}" "$build_root/${source_names[i]}"
   git -C "$build_root/${source_names[i]}" checkout --detach "$commit"
   remote_args+=("${source_names[i]}" "${github_repos[i]}" "$commit")
 done
