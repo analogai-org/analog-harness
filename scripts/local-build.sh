@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Build Chat and Desktop on macOS and a Windows VM, publishing only after both uploads succeed.
-# Windows work is embedded PowerShell; only these two release entry scripts are needed.
+# Build Chat and Desktop on macOS and a Windows VM, publishing only after all uploads succeed.
+# Delegates to the modular pipeline in scripts/deploy/deploy.sh.
 set -Eeuo pipefail
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/github-build.sh"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec bash "$DIR/deploy/deploy.sh" "$@"
+
 
 if [[ ${1:-} == --help ]]; then
   printf 'Usage: bash scripts/local-build.sh [patch|minor|major|VERSION]\nUses the windows-builder SSH alias by default; WINDOWS_SSH_TARGET overrides it.\nRequires Apple Silicon and authenticated gh on both hosts.\nSee scripts/release/README.md for prerequisites.\n'

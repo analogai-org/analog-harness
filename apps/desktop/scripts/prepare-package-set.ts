@@ -88,9 +88,7 @@ export function selectDesktopPackageClosure(
 }
 
 function packedManifest(tarball: string): Record<string, unknown> {
-  const tarArgs = process.platform === 'win32'
-    ? ['--force-local', '-xOzf', basename(tarball), 'package/package.json']
-    : ['-xOzf', basename(tarball), 'package/package.json']
+  const tarArgs = ['-xOzf', basename(tarball), 'package/package.json']
   const value: unknown = JSON.parse(capture('tar', tarArgs, { cwd: dirname(tarball) }))
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error(`desktop package set: ${tarball} has no package manifest`)
